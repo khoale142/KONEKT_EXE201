@@ -1,0 +1,48 @@
+{
+  "name": "dn26-cpl-react-011-backend",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Backend API server",
+  "main": "dist/server.js",
+  "scripts": {
+    "dev": "ts-node-dev --respawn --transpile-only src/server.ts",
+    "build": "tsc",
+    "start": "node dist/server.js",
+    "migrate:staff-profile": "npx ts-node scripts/migrate-staff-profile.ts",
+    "migrate:username-format": "npx ts-node scripts/migrate-username-format.ts",
+    "migrate:payroll": "npx ts-node scripts/migrate-payroll.ts",
+    "migrate:schedule-timestamps": "npx ts-node scripts/migrate-schedule-timestamps.ts",
+    "migrate:notifications-recipients": "npx ts-node scripts/migrate-notifications-recipients.ts",
+    "backfill:schedule-change-notifications": "npx ts-node scripts/backfill-schedule-change-notifications.ts",
+    "check:schema": "npx ts-node scripts/check-users-schema.ts",
+    "seed:chat-faq": "npx ts-node scripts/seed-chat-faq.ts",
+    "check:chatbot": "npx ts-node scripts/check-chatbot-regression.ts"
+  },
+  "dependencies": {
+    "bcrypt": "^6.0.0",
+    "cloudinary": "^2.9.0",
+    "cors": "^2.8.6",
+    "dotenv": "^16.6.1",
+    "express": "^4.22.1",
+    "helmet": "^8.1.0",
+    "jsonwebtoken": "^9.0.3",
+    "morgan": "^1.10.1",
+    "multer": "^2.1.1",
+    "nodemailer": "^8.0.1",
+    "pg": "^8.19.0",
+    "zod": "^4.3.6"
+  },
+  "devDependencies": {
+    "@types/bcrypt": "^6.0.0",
+    "@types/cors": "^2.8.17",
+    "@types/express": "^5.0.6",
+    "@types/jsonwebtoken": "^9.0.10",
+    "@types/morgan": "^1.9.10",
+    "@types/multer": "^2.1.0",
+    "@types/node": "^22.0.0",
+    "@types/nodemailer": "^7.0.11",
+    "@types/pg": "^8.16.0",
+    "ts-node-dev": "^2.0.0",
+    "typescript": "~5.7.0"
+  }
+}

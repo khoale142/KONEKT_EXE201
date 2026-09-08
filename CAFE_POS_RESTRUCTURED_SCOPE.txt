@@ -1,0 +1,267 @@
+================================================================================
+TÀI LIỆU CẤU TRÚC LẠI TÍNH NĂNG VÀ PHÂN QUYỀN HỆ THỐNG
+DỰ ÁN: CAFE MANAGEMENT PLATFORM (MULTI-TENANT SAAS WEB POS)
+Ngày tạo: 08/09/2026
+Mục đích: Tổng hợp & cấu trúc lại tính năng theo từng Role phục vụ chuyển đổi
+         từ Single-Tenant Enterprise sang Multi-Tenant SaaS Web POS
+================================================================================
+
+I. BỐI CẢNH & MỤC TIÊU CHUYỂN ĐỔI
+--------------------------------------------------------------------------------
+1. Hiện trạng (Single-Tenant Enterprise):
+   - Thiết kế cứng nhắc cho 1 thương hiệu duy nhất với 4 Portal riêng biệt:
+     CUSTOMER, STORE, OFFICE, POS.
+   - Phân cấp hành chính cồng kềnh: Head Officer (DM), Marketing, HR, Auditor,
+     Store Manager, Shift Leader, Staff, POS.
+   - Bất cập: Người chủ quán (Owner) không có tài khoản toàn năng, muốn bán hàng
+     phải đổi tài khoản POS, muốn đổi giá phải vào Marketing, muốn xem ca phải
+     vào Store Manager.
+
+2. Mục tiêu mô hình mới (Multi-Tenant SaaS Web POS):
+   - Chuyển sang nền tảng SaaS: Khách hàng đăng ký mở quán ➔ Trở thành Owner
+     của một Tenant ➔ Quản lý 1 hoặc nhiều Store trong chuỗi của mình.
+   - Tinh gọn bộ máy thành 3 vai trò nội bộ chính:
+     + Tenant Owner (Chủ quán/thương hiệu)
+     + Store Manager (Quản lý chi nhánh)
+     + Staff / Cashier / Barista (Nhân viên quầy & pha chế)
+   - Bổ sung vai trò Platform Super Admin (quản trị nền tảng SaaS) và giữ vững
+     vai trò Customer / Member (khách hàng mua hàng & hội viên).
+   - "Owner-Centric": Owner toàn quyền quản trị (kho, menu, nhân sự, doanh thu)
+     VÀ có thể vào thẳng màn hình POS của bất kỳ Store nào để trực tiếp bán hàng.
+
+
+================================================================================
+II. BẢNG MA TRẬN PHÂN QUYỀN TỔNG QUAN (FEATURE PERMISSION MATRIX)
+================================================================================
+Ký hiệu:
+  [X]  : Không có quyền / Không áp dụng
+  [V]  : Toàn quyền thao tác
+  [~]  : Giới hạn theo phạm vi Store được phân công hoặc cần cấp quyền
+  [M]  : Chỉ xem (View / Read-only)
+  [A]  : Tự động xử lý bởi hệ thống
+
++-----------------------------------------------+-------+-------+-------+-------+----------+
+| NHÓM TÍNH NĂNG / NGHIỆP VỤ                    | ADMIN | OWNER | S.MGR | STAFF | CUSTOMER |
++-----------------------------------------------+-------+-------+-------+-------+----------+
+| 1. BÁN HÀNG & MÀN HÌNH QUẦY (POS & KDS)       |       |       |       |       |          |
+| - Truy cập màn hình POS bán hàng              |  [X]  |  [V]  |  [~]  |  [~]  |   [X]    |
+| - Tạo đơn, chọn biến thể, topping, áp combo   |  [X]  |  [V]  |  [V]  |  [V]  |   [X]    |
+| - Thu tiền mặt / Xuất mã VietQR động          |  [X]  |  [V]  |  [V]  |  [V]  |   [X]    |
+| - Giữ đơn (Hold order) & Thanh toán đơn giữ   |  [X]  |  [V]  |  [V]  |  [V]  |   [X]    |
+| - Hoàn tiền (Refund) & Hủy hóa đơn (Void)     |  [X]  |  [V]  |  [V]  |  [~]  |   [X]    |
+| - Tiếp nhận & Xác nhận đơn online đặt trước   |  [X]  |  [V]  |  [V]  |  [V]  |   [X]    |
+| - Mở / Đóng ca, đếm tiền két đối soát chênh   |  [X]  |  [V]  |  [V]  |  [V]  |   [X]    |
+| - Màn hình Bếp (KDS) cập nhật tiến độ món     |  [X]  |  [V]  |  [V]  |  [V]  |   [X]    |
+| - Màn hình TV gọi số công cộng (Pickup Board) |  [X]  |  [V]  |  [V]  |  [M]  |   [M]    |
++-----------------------------------------------+-------+-------+-------+-------+----------+
+| 2. THỰC ĐƠN, CÔNG THỨC & KHUYẾN MÃI           |       |       |       |       |          |
+| - Quản lý danh mục, món, size, topping, giá   |  [X]  |  [V]  |  [~]  |  [X]  |   [M]    |
+| - Công thức & Định lượng (BOM / Recipe)       |  [X]  |  [V]  |  [M]  |  [X]  |   [X]    |
+| - Bán thành phẩm (syrup, sốt, cốt trà pha sẵn)|  [X]  |  [V]  |  [M]  |  [X]  |   [X]    |
+| - Tự động trừ kho theo công thức khi POS bán  |  [A]  |  [A]  |  [A]  |  [A]  |   [X]    |
+| - Cấu hình Quy tắc Combo giảm giá tự động     |  [X]  |  [V]  |  [X]  |  [X]  |   [M]    |
+| - Tạo chiến dịch Voucher, Khuyến mãi          |  [X]  |  [V]  |  [X]  |  [X]  |   [M]    |
++-----------------------------------------------+-------+-------+-------+-------+----------+
+| 3. QUẢN LÝ KHO & NGUYÊN VẬT LIỆU              |       |       |       |       |          |
+| - Danh mục nguyên vật liệu & đơn vị quy đổi   |  [X]  |  [V]  |  [M]  |  [X]  |   [X]    |
+| - Tạo & Duyệt phiếu Nhập kho từ nhà cung cấp  |  [X]  |  [V]  |  [V]  |  [~]  |   [X]    |
+| - Kiểm kê kho định kỳ / chốt số đếm thực tế   |  [X]  |  [V]  |  [V]  |  [~]  |   [X]    |
+| - Báo cáo hư hao & Tạo Lệnh hủy kho           |  [X]  |  [V]  |  [V]  |  [~]  |   [X]    |
+| - Cảnh báo nguyên vật liệu sắp hết tồn kho    |  [X]  |  [V]  |  [V]  |  [V]  |   [X]    |
+| - Điều chuyển nguyên liệu giữa các chi nhánh  |  [X]  |  [V]  |  [~]  |  [X]  |   [X]    |
++-----------------------------------------------+-------+-------+-------+-------+----------+
+| 4. NHÂN SỰ, XẾP CA & TÍNH LƯƠNG               |       |       |       |       |          |
+| - Quản lý hồ sơ nhân viên, hợp đồng, CCCD     |  [X]  |  [V]  |  [M]  |  [~]  |   [X]    |
+| - Xếp lịch làm việc theo ca (tuần/tháng)      |  [X]  |  [V]  |  [V]  |  [M]  |   [X]    |
+| - Chấm công vào/ra ca (Check-in/Check-out)    |  [X]  |  [V]  |  [V]  |  [V]  |   [X]    |
+| - Phê duyệt đổi ca, xin nghỉ phép             |  [X]  |  [V]  |  [V]  |  [~]  |   [X]    |
+| - Xem & Chốt bảng lương nhân viên             |  [X]  |  [V]  |  [M]  |  [M]  |   [X]    |
++-----------------------------------------------+-------+-------+-------+-------+----------+
+| 5. BÁO CÁO & PHÂN TÍCH DOANH THU              |       |       |       |       |          |
+| - Dashboard tổng hợp toàn chuỗi đa Store      |  [X]  |  [V]  |  [X]  |  [X]  |   [X]    |
+| - Báo cáo doanh thu chi tiết từng Store       |  [X]  |  [V]  |  [V]  |  [~]  |   [X]    |
+| - Báo cáo Giá vốn & Lợi nhuận (COGS / Margin) |  [X]  |  [V]  |  [X]  |  [X]  |   [X]    |
+| - Nhật ký thao tác thu ngân (Action Log)      |  [X]  |  [V]  |  [V]  |  [X]  |   [X]    |
++-----------------------------------------------+-------+-------+-------+-------+----------+
+| 6. KHÁCH HÀNG & DỊCH VỤ ONLINE                |       |       |       |       |          |
+| - Đặt món online (Pick-up), trả VietQR        |  [X]  |  [X]  |  [X]  |  [X]  |   [V]    |
+| - Tích điểm hội viên, đổi quà, thẻ tích tem   |  [X]  |  [V]  |  [M]  |  [M]  |   [V]    |
+| - CMS đăng tin tức, bài viết, banner ưu đãi   |  [X]  |  [V]  |  [X]  |  [X]  |   [M]    |
+| - Chatbot AI tư vấn menu, gợi ý món kèm       |  [X]  |  [V]  |  [X]  |  [X]  |   [V]    |
+| - Gửi & Giải quyết khiếu nại đơn hàng         |  [X]  |  [V]  |  [V]  |  [M]  |   [V]    |
++-----------------------------------------------+-------+-------+-------+-------+----------+
+| 7. NỀN TẢNG SAAS & QUẢN TRỊ TENANT            |       |       |       |       |          |
+| - Đăng ký tài khoản mở quán (Tạo Tenant)      |  [X]  |  [V]  |  [X]  |  [X]  |   [X]    |
+| - Quản lý danh sách Tenant, khóa/mở thương hiệu| [V]  |  [X]  |  [X]  |  [X]  |   [X]    |
+| - Quản lý gói cước dịch vụ & gia hạn SaaS     |  [V]  |  [V]  |  [X]  |  [X]  |   [X]    |
++-----------------------------------------------+-------+-------+-------+-------+----------+
+
+
+================================================================================
+III. CHI TIẾT CHỨC NĂNG THEO TỪNG VAI TRÒ
+================================================================================
+
+--------------------------------------------------------------------------------
+1. PLATFORM SUPER ADMIN (Quản trị Nền tảng SaaS)
+--------------------------------------------------------------------------------
+- Đối tượng: Quản trị viên kỹ thuật của hệ thống SaaS chung.
+- Phạm vi: Toàn hệ thống (xuyên suốt các Tenant).
+- Các chức năng chính:
+  + Quản lý danh mục Tenant: Danh sách các thương hiệu/quán, thông tin liên hệ,
+    ngày đăng ký, trạng thái hoạt động (Active, Suspended, Expired).
+  + Quản lý Gói cước (Subscriptions): Thiết lập các gói thuê bao (gói 1 quán,
+    gói chuỗi 5 quán, gói không giới hạn), thời hạn, tính năng kích hoạt.
+  + Thống kê cấp hệ thống: Tổng số lượng quán, số lượng hóa đơn phát sinh, dung
+    lượng lưu trữ hình ảnh.
+
+--------------------------------------------------------------------------------
+2. TENANT OWNER (Chủ thương hiệu / Chủ chuỗi quán)
+--------------------------------------------------------------------------------
+- Đối tượng: Người đăng ký mở quán, người chịu trách nhiệm cao nhất của Tenant.
+- Phạm vi: Toàn bộ dữ liệu của Tenant mình (bao gồm tất cả Store trực thuộc).
+- Các chức năng chính:
+
+  A. Bán hàng & Trải nghiệm Quầy (POS Access):
+     * Được quyền truy cập giao diện bán hàng POS của bất kỳ Store nào thuộc sở hữu.
+     * Nút bấm chuyển đổi nhanh 1-chạm: "Trang Quản trị" <--> "Màn hình POS".
+     * Toàn quyền tại quầy: Mở/đóng ca đối soát tiền mặt, hủy hóa đơn, hoàn tiền.
+
+  B. Quản lý Thực đơn, Công thức & Khuyến mãi (Menu & Recipe Management):
+     * Khai báo Danh mục món, Sản phẩm, Biến thể (size, đá, đường, topping).
+     * Khai báo Công thức & Định lượng (BOM): Cài đặt từng món cần bao nhiêu gram/ml
+       nguyên liệu để hệ thống tự động trừ kho chuẩn xác khi thu ngân xuất đơn.
+     * Khai báo Bán thành phẩm: Nước đường nấu sẵn, sốt, syrup, cốt trà ủ sẵn.
+     * Thiết lập Quy tắc Combo tự động (mua Nước + Bánh giảm giá).
+     * Tạo Voucher, chương trình khuyến mãi, cài đặt tỷ lệ tích điểm hội viên.
+
+  C. Quản lý Kho hàng & Chuỗi cung ứng (Inventory Management):
+     * Khai báo Danh mục nguyên vật liệu, đơn vị tính, đơn vị quy đổi (Kg <-> g).
+     * Xem tồn kho thực tế của tất cả các Store theo thời gian thực.
+     * Phê duyệt các đợt kiểm kê kho lớn có chênh lệch cao.
+     * Phê duyệt Lệnh hủy kho (hư hao, hết hạn sử dụng) do Store gửi lên.
+     * Tạo phiếu điều chuyển nguyên vật liệu giữa các chi nhánh.
+
+  D. Báo cáo Doanh thu & Chỉ số Kinh doanh (Dashboard & BI):
+     * Dashboard tổng hợp: Doanh thu theo ngày/tháng, số lượng đơn, khung giờ vàng.
+     * So sánh hiệu quả kinh doanh giữa các Store (Store A vs Store B).
+     * Báo cáo Giá vốn hàng bán (COGS) và Lợi nhuận gộp từng món ăn/đồ uống.
+     * Báo cáo chênh lệch két tiền mặt đầu/cuối ca.
+     * Xem Action Log: Nhật ký chi tiết mọi thao tác nhạy cảm của nhân viên quầy.
+
+  E. Quản trị Chi nhánh & Nhân sự:
+     * Thêm mới, chỉnh sửa thông tin chi nhánh (Store).
+     * Thêm tài khoản Store Manager và Staff, phân bổ nhân viên vào từng Store.
+     * Tùy chỉnh bật/tắt quyền hạn nhân viên (ví dụ: cấm nhân viên tự xóa đơn).
+     * Xem và chốt Bảng tính lương tổng hợp toàn chuỗi.
+
+  F. Chăm sóc Khách hàng & Nội dung:
+     * Soạn thảo bài viết tin tức, banner khuyến mãi hiển thị trên trang online.
+     * Cấu hình chatbot AI (danh mục món gợi ý đi kèm).
+     * Xem danh sách khiếu nại của khách hàng, phân bổ cho Store Manager xử lý.
+
+--------------------------------------------------------------------------------
+3. STORE MANAGER (Quản lý Cửa hàng / Chi nhánh)
+--------------------------------------------------------------------------------
+- Đối tượng: Quản lý được Owner giao quyền trông coi 1 Store cụ thể.
+- Phạm vi: Dữ liệu thuộc Store mà mình được phân công phụ trách.
+- Các chức năng chính:
+
+  A. Vận hành Quầy & Bán hàng (POS / KDS):
+     * Đăng nhập máy POS của Store mình quản lý để bán hàng khi đông khách.
+     * Phê duyệt quyền hủy hóa đơn, hoàn tiền khi nhân viên thu ngân yêu cầu.
+     * Mở ca / Đóng ca đối soát tiền mặt cùng thu ngân.
+     * Theo dõi màn hình Bếp (KDS) và màn hình gọi số (Pickup Board).
+
+  B. Vận hành Kho cơ sở:
+     * Nhận hàng từ nhà cung cấp: Kiểm đếm số lượng, HSD, tạo & ký phiếu Nhập kho.
+     * Mở đợt kiểm kê kho cơ sở, phân công nhân viên đếm và duyệt kết quả kiểm kê.
+     * Rà soát các báo cáo hư hao trong ca của nhân viên, gom lại thành Lệnh hủy kho
+       và trình Owner phê duyệt.
+
+  C. Quản trị Nhân sự cơ sở:
+     * Xếp lịch làm việc theo ca (tuần/tháng) cho nhân viên tại cơ sở.
+     * Duyệt / từ chối các yêu cầu xin nghỉ phép, đổi ca của nhân viên.
+     * Theo dõi chấm công thực tế hàng ngày (Check-in / Check-out).
+     * Xem báo cáo doanh thu và dự tính quỹ lương chi nhánh mình.
+
+  D. Xử lý Sự cố & Khiếu nại:
+     * Trực tiếp tiếp nhận và giải quyết các khiếu nại, đánh giá xấu từ khách hàng
+       về đơn hàng tại chi nhánh của mình.
+
+--------------------------------------------------------------------------------
+4. STAFF / CASHIER / BARISTA (Nhân viên Quầy & Pha chế)
+--------------------------------------------------------------------------------
+- Đối tượng: Nhân viên làm việc trực tiếp tại cửa hàng.
+- Phạm vi: Thao tác ca làm việc tại Store được phân công.
+- Các chức năng chính:
+
+  A. Thu ngân (Cashier):
+     * Đăng nhập vào POS tại quầy của Store mình có ca làm việc.
+     * Bán hàng: Chọn món, chọn mức đường/đá, thêm topping, quét mã giảm giá.
+     * Quét mã khách hàng để tích điểm hoặc áp voucher.
+     * Nhận thanh toán tiền mặt hoặc hiển thị mã VietQR động cho khách quét.
+     * Giữ đơn tạm thời (Hold order) cho khách thanh toán sau.
+     * Mở ca: Khai báo số tiền lẻ đầu ca.
+     * Kết ca: Kiểm đếm tiền két, bàn giao doanh thu ca.
+     * Không tự ý xóa đơn/hoàn tiền nếu không có sự phê duyệt của Quản lý/Owner.
+
+  B. Pha chế (Barista / Kitchen):
+     * Xem màn hình KDS hiển thị danh sách đơn cần làm theo thứ tự đặt món.
+     * Xem chi tiết từng món + ghi chú riêng của khách.
+     * Chuyển trạng thái món: "Đang pha chế" -> "Hoàn thành".
+
+  C. Nghiệp vụ Kho & Cá nhân:
+     * Nhập số lượng đếm thực tế khi tham gia ca kiểm kê kho.
+     * Tạo phiếu báo cáo hư hao khi xảy ra đổ vỡ, nguyên liệu hỏng trong ca.
+     * Xem lịch làm việc cá nhân được xếp.
+     * Gửi yêu cầu xin nghỉ hoặc đổi ca cho nhân viên khác.
+     * Chấm công vào ca / ra ca (Check-in / Check-out).
+     * Xem chi tiết phiếu lương cá nhân hàng tháng.
+
+--------------------------------------------------------------------------------
+5. CUSTOMER / MEMBER (Khách hàng & Hội viên)
+--------------------------------------------------------------------------------
+- Đối tượng: Khách hàng mua sắm online hoặc trải nghiệm tại cửa hàng.
+- Phạm vi: Dữ liệu tài khoản cá nhân, lịch sử đơn và điểm tích lũy của chính mình.
+- Các chức năng chính:
+
+  A. Đặt hàng Online (Pick-up):
+     * Đăng ký/đăng nhập bằng SĐT/Email qua OTP.
+     * Xem danh sách các chi nhánh của quán kèm định vị bản đồ.
+     * Xem menu, tùy chỉnh món (size, đường, đá, topping).
+     * Giỏ hàng thông minh: Tự động phát hiện combo giảm giá.
+     * Chọn thời gian đến lấy món (Pickup time).
+     * Thanh toán trực tuyến qua VietQR (xác nhận tự động không cần gửi bill).
+     * Hỗ trợ thanh toán lại nếu lần thanh toán trước chưa thành công.
+
+  B. Khách hàng thân thiết (Loyalty):
+     * Tích điểm theo số điện thoại / mã QR cá nhân hiển thị tại quầy.
+     * Đổi điểm lấy voucher giảm giá, tích tem đổi quà miễn phí.
+     * Ví voucher cá nhân lưu trữ các mã ưu đãi đã nhận.
+
+  C. Theo dõi & Tương tác:
+     * Theo dõi tiến trình làm món trực tiếp (Đang pha chế -> Mời đến lấy).
+     * Gửi yêu cầu lùi giờ lấy món nếu đến trễ.
+     * Đánh giá sao & nhận xét chất lượng món sau khi hoàn thành.
+     * Tạo ticket khiếu nại / phản ánh sự cố nếu đơn hàng gặp vấn đề.
+     * Tương tác với Chatbot AI để hỏi thông tin menu, tìm quán, gợi ý món kèm.
+
+
+================================================================================
+IV. NHỮNG ĐIỂM CỐT LÕI CẦN LƯU Ý KHI LÊN KẾ HOẠCH TRIỂN KHAI
+================================================================================
+1. Cơ chế trừ kho tự động (BOM / Recipe):
+   - Khi đơn POS hoàn tất thanh toán -> Hệ thống tự động bóc tách công thức món
+     để trừ đúng số lượng nguyên vật liệu trong kho của Store đó.
+
+2. Trải nghiệm Owner không bị ngắt quãng:
+   - Header luôn có nút chuyển đổi chế độ: [Chế độ Quản trị] <-> [Mở Bán hàng POS].
+
+3. Cô lập dữ liệu đa Tenant (Row-Level Isolation):
+   - Mọi bảng dữ liệu đều gắn `tenant_id`.
+   - Token JWT của người dùng luôn mang `tenant_id` để middleware tự động lọc dữ
+     liệu, đảm bảo tuyệt đối không lộ dữ liệu giữa các quán khác nhau.
+
+4. Khách hàng theo Tenant hay Toàn hệ thống:
+   - Đề xuất mặc định: Mỗi Tenant có tập khách hàng và điểm thưởng độc lập.
+================================================================================
