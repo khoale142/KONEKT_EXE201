@@ -99,3 +99,21 @@
 * **Hiện trạng & Bước tiếp theo**:
   * Đã hoàn thiện toàn bộ công tác chuẩn bị, bộ kỹ năng và quy tắc.
   * Trình bản kế hoạch `PLAN-01` cho User xem xét phê duyệt trước khi bắt đầu thực thi code.
+
+---
+
+### [LOG-005] | 08/09/2026 - KHỞI TẠO GIT MỚI & PUSH TOÀN BỘ LÊN GITHUB KONEKT_EXE201
+* **Người thực hiện**: Antigravity AI Agent (theo chỉ đạo của User).
+* **Tác vụ**:
+  1. Hủy bỏ Git repo cũ của FSoft mock project (xóa `.git` cũ theo lựa chọn của User).
+  2. Khởi tạo Git repository mới tinh trên branch `main`.
+  3. Sửa file `.gitignore` để đảm bảo thư mục `docs/Developing/logs/` (chứa changelog) được track đầy đủ vào Git, đồng thời giữ bí mật tuyệt đối `backend/.env` và các thư mục `node_modules/`.
+  4. Trỏ remote `origin` sang repository GitHub mới: `https://github.com/khoale142/KONEKT_EXE201.git`.
+  5. Commit toàn bộ mã nguồn, tài liệu, AI rules, Agent skills và push thành công lên `origin/main`.
+* **Files tác động**:
+  * `[CHỈNH SỬA]` `.gitignore` (Track `docs/Developing/logs/**`)
+  * `[TẠO MỚI COMMIT]` Toàn bộ cấu trúc dự án lên GitHub `KONEKT_EXE201`.
+  * `[CHỈNH SỬA]` `docs/Developing/logs/DEV_CHANGELOG.md` (Ghi nhận LOG-005)
+* **Hiện trạng & Bước tiếp theo**:
+  * Mã nguồn dự án mới đã được lưu trữ an toàn trên GitHub `https://github.com/khoale142/KONEKT_EXE201.git`.
+  * Sẵn sàng bắt đầu triển khai các bước trong [PLAN-01](file:///c:/FPT_KHOA/cafe-management-platform-v1.0/docs/Developing/plans/PLAN-01_ROLE_RESTRUCTURING_AND_DATABASE_SETUP.md).
