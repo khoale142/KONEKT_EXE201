@@ -27,22 +27,51 @@ textarea {
   font-family: inherit;
 }
 
-/* Bakery / Cafe theme - Olive, Cream, Brown */
+/* ──────────────────────────────────────────────────────────────────────
+   KONEKT Brand Palette – Xanh rêu đậm (Dark Moss Green) & Kem ngà (Warm Ivory Cream)
+   Tuân thủ AI_RULES.md Quy tắc #5: Chỉ thay đổi sắc độ (tints/shades) để tạo
+   sự khác biệt, tương phản và phân cấp thị giác.
+   ────────────────────────────────────────────────────────────────────── */
 :root,
 .cafe-theme {
-  --cafe-olive: #3d503c;
-  --cafe-olive-light: #4a5d4a;
-  --cafe-olive-dark: #2d3b2d;
-  --cafe-cream: #f5f0e8;
-  --cafe-cream-dark: #ebe5dc;
+  /* ── Xanh rêu đậm (Primary / Brand) ── */
+  --cafe-olive: #364D39;
+  --cafe-olive-light: #4A664E;
+  --cafe-olive-dark: #2A3B2C;
+  --cafe-olive-hover: #3E5A42;
+  --cafe-olive-muted: rgba(54, 77, 57, 0.15);
+
+  /* ── Kem ngà (Background / Surface) ── */
+  --cafe-cream: #F4EFEB;
+  --cafe-cream-dark: #E8E0D5;
+  --cafe-cream-light: #FAF6F3;
+  --cafe-white: #FDFCFA;
+
+  /* ── Accent / Brown (Secondary — derived from original) ── */
   --cafe-brown: #6b5344;
   --cafe-brown-light: #8b7355;
   --cafe-brown-dark: #5a4538;
+
+  /* ── Text ── */
   --cafe-text: #2c2c2c;
   --cafe-text-muted: #6b6b6b;
-  --cafe-white: #faf8f5;
+  --cafe-text-on-primary: #F4EFEB;
+
+  /* ── Semantic ── */
   --cafe-error: #c0392b;
   --cafe-success: #27ae60;
+  --cafe-warning: #e67e22;
+  --cafe-info: #2980b9;
+
+  /* ── Shadows & Borders ── */
+  --cafe-shadow-sm: 0 1px 3px rgba(42, 59, 44, 0.08);
+  --cafe-shadow-md: 0 4px 12px rgba(42, 59, 44, 0.10);
+  --cafe-shadow-lg: 0 8px 24px rgba(42, 59, 44, 0.12);
+  --cafe-border: #E8E0D5;
+  --cafe-border-light: rgba(232, 224, 213, 0.6);
+
+  /* ── Transition ── */
+  --cafe-transition: 200ms cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 body {
@@ -1658,3 +1687,25 @@ small.cafe-helper {
   background: #fff5e6 !important;
   color: var(--cafe-olive-dark) !important;
 }
+
+/* ── KONEKT Infinite Marquee Animation ── */
+@keyframes konektMarquee {
+  0% {
+    transform: translateX(0);
+  }
+  100% {
+    transform: translateX(-50%);
+  }
+}
+
+.konekt-marquee-track {
+  display: flex;
+  width: max-content;
+  animation: konektMarquee 35s linear infinite;
+  will-change: transform;
+}
+
+.konekt-marquee-track:hover {
+  animation-play-state: paused;
+}
+

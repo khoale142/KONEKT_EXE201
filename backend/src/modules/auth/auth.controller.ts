@@ -250,3 +250,45 @@ export const officeResetPassword = asyncHandler(
     res.json(result);
   }
 );
+
+// ── KONEKT Multi-Tenant Endpoints ──
+import {
+  registerOwner,
+  loginKonekt as loginKonektService,
+  demoLogin as demoLoginService,
+} from "./konektAuth.service";
+
+export const registerOwnerHandler = asyncHandler(
+  async (req: Request, res: Response) => {
+    const { brandName, fullName, email, password, phone, address } = req.body;
+    const result = await registerOwner({
+      brandName,
+      fullName,
+      email,
+      password,
+      phone,
+      address,
+    });
+    res.status(201).json(result);
+  }
+);
+
+export const loginKonektHandler = asyncHandler(
+  async (req: Request, res: Response) => {
+    const { identifier, password } = req.body;
+    if (!identifier || !password) {
+      throw new ApiError(400, "Vui lòng nhập tài khoản và mật khẩu");
+    }
+    const result = await loginKonektService(identifier, password);
+    res.json(result);
+  }
+);
+
+export const demoLoginHandler = asyncHandler(
+  async (req: Request, res: Response) => {
+    const role = (req.body.role || "owner") as "owner" | "manager" | "staff";
+    const result = await demoLoginService(role);
+    res.json(result);
+  }
+);
+

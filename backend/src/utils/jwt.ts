@@ -7,6 +7,7 @@ export type AccessClaims = {
   sub: string;            // user id (string)
   portal: Portal;
   roles?: string[];
+  tenantId?: number;      // Multi-tenant: ID thương hiệu (REQ-01)
   storeIds?: number[];    // staff/office: nhieu store
   storeId?: number;       // POS: 1 store
 };

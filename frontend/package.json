@@ -15,6 +15,7 @@
     "axios": "^1.13.5",
     "bootstrap": "^5.3.8",
     "dayjs": "^1.11.20",
+    "lucide-react": "^1.43.0",
     "react": "^19.0.0",
     "react-datepicker": "^9.1.0",
     "react-dom": "^19.0.0",

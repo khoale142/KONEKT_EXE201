@@ -1,4 +1,4 @@
-﻿import {
+import {
   createBrowserRouter,
   RouterProvider,
   Link,
@@ -13,6 +13,7 @@ import { useAuthStore } from "../../app/store/auth.store";
 import PortalSelectPage from "../../features/auth/pages/PortalSelectPage";
 import CustomerLoginPage from "../../features/auth/pages/CustomerLoginPage";
 import CustomerRegisterPage from "../../features/auth/pages/CustomerRegisterPage";
+import OwnerRegisterPage from "../../features/auth/pages/OwnerRegisterPage";
 import CustomerForgotPasswordPage from "../../features/auth/pages/CustomerForgotPasswordPage";
 import CustomerResetOtpPage from "../../features/auth/pages/CustomerResetOtpPage";
 import CustomerResetPasswordPage from "../../features/auth/pages/CustomerResetPasswordPage";
@@ -24,6 +25,7 @@ import StoreBranchSelectPage from "../../features/auth/pages/StoreBranchSelectPa
 import OfficeLoginPage from "../../features/auth/pages/OfficeLoginPage";
 import OfficeBranchSelectPage from "../../features/auth/pages/OfficeBranchSelectPage";
 import PosLoginPage from "../../features/auth/pages/PosLoginPage";
+import MerchantLoginPage from "../../features/auth/pages/MerchantLoginPage";
 
 import AuthLayout from "../../shared/layouts/AuthLayout";
 import StoreLayout from "../../shared/layouts/StoreLayout";
@@ -298,12 +300,24 @@ const router = createBrowserRouter([
   },
 
   {
+    path: "/login",
+    element: <MerchantLoginPage />,
+  },
+  {
+    path: "/login/merchant",
+    element: <Navigate to="/login" replace />,
+  },
+  {
     path: "/login/customer",
     element: (
       <AuthLayout>
         <CustomerLoginPage />
       </AuthLayout>
     ),
+  },
+  {
+    path: "/register/owner",
+    element: <OwnerRegisterPage />,
   },
   {
     path: "/register/customer",
@@ -1068,11 +1082,27 @@ const router = createBrowserRouter([
     ),
   },
 
-  // Office / Head Officer zone — role district_manager, admin
+  // Office / Head Officer zone — role district_manager, admin, owner
   // OFFICE
   {
     path: "/office",
-    element: <Navigate to="/login/office" replace />,
+    element: (
+      <RequirePortal portal="OFFICE">
+        <OfficeLayout>
+          <OfficeLanding />
+        </OfficeLayout>
+      </RequirePortal>
+    ),
+  },
+  {
+    path: "/office/dashboard",
+    element: (
+      <RequirePortal portal="OFFICE">
+        <OfficeLayout>
+          <DashboardPage />
+        </OfficeLayout>
+      </RequirePortal>
+    ),
   },
   {
     path: "/office/audit",

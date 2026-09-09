@@ -107,4 +107,16 @@ router.post("/office/reset-password", officeResetPassword);
 router.post("/refresh", refresh);
 router.get("/me", authGuard, me);
 
+// ── KONEKT Multi-Tenant Endpoints ──
+import {
+  registerOwnerHandler,
+  loginKonektHandler,
+  demoLoginHandler,
+} from "./auth.controller";
+
+router.post("/register-owner", registerOwnerHandler);
+router.post("/login-konekt", loginKonektHandler);
+router.post("/demo-login", demoLoginHandler);
+
 export default router;
+

@@ -1,69 +1,83 @@
 import { type PropsWithChildren, useEffect, useState } from "react";
-import { Link, useLocation } from "react-router-dom";
-import { useAuthStore } from "../../app/store/auth.store";
+import { Link, useLocation, useNavigate } from "react-router-dom";
+import { useAuthStore, isOwnerOrAdmin } from "../../app/store/auth.store";
 import useIsMobileViewport from "../hooks/useIsMobileViewport";
 
 type NavItem = { to: string; label: string; section?: string; roles: string[] };
 
+/**
+ * Navigation Items — OWNER-CENTRIC MODEL (PLAN-01 Bước 3)
+ * ──────────────────────────────────────────────────────────
+ * Owner thấy TẤT CẢ mục menu trong một giao diện quản trị duy nhất.
+ * Store Manager chỉ thấy các mục liên quan đến Store mình phụ trách.
+ */
 const ALL_NAV: NavItem[] = [
-  { to: "/office/dm", label: "Tổng quan", section: "Quản lý chung", roles: ["district_manager", "admin"] },
-  { to: "/office/reports/revenue", label: "Doanh thu / Chi tiêu", roles: ["district_manager", "admin"] },
-  { to: "/office/dm/inventory-waste", label: "Tồn kho & hủy hàng", roles: ["district_manager", "admin"] },
-  { to: "/office/dm/inventory-shift", label: "Duyệt kiểm hàng", roles: ["district_manager", "admin"] },
-  { to: "/office/complaints", label: "Phản hồi khách hàng", roles: ["district_manager", "admin"] },
+  // ── Tổng quan & Doanh thu ──
+  { to: "/office/dashboard", label: "Tổng quan", section: "Quản lý kinh doanh", roles: ["owner", "store_manager"] },
+  { to: "/office/reports/revenue", label: "Doanh thu / Chi tiêu", roles: ["owner", "store_manager"] },
+  { to: "/office/dm/inventory-waste", label: "Tồn kho & hủy hàng", roles: ["owner", "store_manager"] },
+  { to: "/office/dm/inventory-shift", label: "Duyệt kiểm hàng", roles: ["owner", "store_manager"] },
+  { to: "/office/complaints", label: "Phản hồi khách hàng", roles: ["owner", "store_manager"] },
 
-  { to: "/office/marketing/contents", label: "Nội dung marketing", section: "Marketing & CSKH", roles: ["marketing_sale", "admin"] },
-  { to: "/office/marketing/contents/new", label: "Tạo bài viết", roles: ["marketing_sale", "admin"] },
-  { to: "/office/marketing/point-vouchers", label: "Voucher đổi điểm", roles: ["marketing_sale", "admin"] },
-  { to: "/office/marketing/complaints", label: "Chăm sóc khách hàng", roles: ["marketing_sale", "admin"] },
+  // ── Thực đơn & Marketing ──
+  { to: "/office/marketing/contents", label: "Nội dung marketing", section: "Thực đơn & Marketing", roles: ["owner"] },
+  { to: "/office/marketing/contents/new", label: "Tạo bài viết", roles: ["owner"] },
+  { to: "/office/marketing/point-vouchers", label: "Voucher đổi điểm", roles: ["owner"] },
+  { to: "/office/marketing/complaints", label: "Chăm sóc khách hàng", roles: ["owner"] },
 
-  { to: "/office/audit/stores", label: "Đối chiếu dữ liệu quán", section: "Audit & QC", roles: ["auditor", "admin"] },
-  { to: "/office/audit/flags", label: "Audit flags", roles: ["auditor", "admin"] },
-  { to: "/office/audit/reports", label: "Audit reports", roles: ["auditor", "admin"] },
-  { to: "/office/hr", label: "Bảng điều khiển HR", section: "Human Resources", roles: ["hr_manager", "admin"] },
-  { to: "/office/hr/profile-requests", label: "Yêu cầu chỉnh hồ sơ", roles: ["hr_manager", "admin"] },
-  { to: "/office/hr/employees", label: "Nhân sự", roles: ["hr_manager", "admin"] },
-  { to: "/office/hr/attendance", label: "Giám sát chấm công", roles: ["hr_manager", "admin"] },
-  { to: "/office/hr/schedules", label: "Lịch làm việc", roles: ["hr_manager", "admin"] },
-  { to: "/office/hr/payroll", label: "Quỹ lương", roles: ["hr_manager", "admin"] },
-  { to: "/office/hr/requests", label: "Yêu cầu tuyển / sa thải", roles: ["hr_manager", "admin"] },
+  // ── Audit & QC ──
+  { to: "/office/audit/stores", label: "Đối chiếu dữ liệu quán", section: "Kiểm soát & Audit", roles: ["owner"] },
+  { to: "/office/audit/flags", label: "Audit flags", roles: ["owner"] },
+  { to: "/office/audit/reports", label: "Audit reports", roles: ["owner"] },
+
+  // ── Nhân sự & Lương ──
+  { to: "/office/hr", label: "Bảng điều khiển HR", section: "Nhân sự & Lương", roles: ["owner"] },
+  { to: "/office/hr/profile-requests", label: "Yêu cầu chỉnh hồ sơ", roles: ["owner"] },
+  { to: "/office/hr/employees", label: "Nhân sự", roles: ["owner"] },
+  { to: "/office/hr/attendance", label: "Giám sát chấm công", roles: ["owner", "store_manager"] },
+  { to: "/office/hr/schedules", label: "Lịch làm việc", roles: ["owner", "store_manager"] },
+  { to: "/office/hr/payroll", label: "Quỹ lương", roles: ["owner"] },
+  { to: "/office/hr/requests", label: "Yêu cầu tuyển / sa thải", roles: ["owner"] },
 ];
 
+/**
+ * KONEKT Brand Theme — Xanh rêu đậm & Kem ngà (AI_RULES #5)
+ */
 const officeTheme = {
-  sidebarBg: "#f6f1e7",
-  sidebarBorder: "#ddd1bc",
-  headerBg: "#fdfaf4",
-  headerBorder: "#e7dcc8",
-  brand: "#3f5a40",
-  brandMeta: "#8a7f6a",
-  text: "#5f584c",
-  textStrong: "#2f3e2f",
-  activeText: "#3f5a40",
-  activeBg: "#e3eadb",
-  activeBorder: "#b8c6ae",
-  divider: "#e7dcc8",
-  avatarBg: "#e8dfd1",
-  avatarText: "#5e5447",
-  pageBg: "#f1f5f0",
+  sidebarBg: "#F4EFEB",
+  sidebarBorder: "#E8E0D5",
+  headerBg: "#FAF6F3",
+  headerBorder: "#E8E0D5",
+  brand: "#364D39",
+  brandMeta: "#6b6b6b",
+  text: "#6b6b6b",
+  textStrong: "#2A3B2C",
+  activeText: "#364D39",
+  activeBg: "rgba(54, 77, 57, 0.10)",
+  activeBorder: "#4A664E",
+  divider: "#E8E0D5",
+  avatarBg: "#364D39",
+  avatarText: "#F4EFEB",
+  pageBg: "#FAF6F3",
   maxWidth: undefined as string | undefined,
 };
 
 const hrTheme = {
-  sidebarBg: "#f6f1e7",
-  sidebarBorder: "#ddd1bc",
-  headerBg: "#fdfaf4",
-  headerBorder: "#e7dcc8",
-  brand: "#3f5a40",
-  brandMeta: "#8a7f6a",
-  text: "#5f584c",
-  textStrong: "#2f3e2f",
-  activeText: "#3f5a40",
-  activeBg: "#e3eadb",
-  activeBorder: "#b8c6ae",
-  divider: "#e7dcc8",
-  avatarBg: "#e8dfd1",
-  avatarText: "#5e5447",
-  pageBg: "#f1f5f0",
+  sidebarBg: "#F4EFEB",
+  sidebarBorder: "#E8E0D5",
+  headerBg: "#FAF6F3",
+  headerBorder: "#E8E0D5",
+  brand: "#364D39",
+  brandMeta: "#6b6b6b",
+  text: "#6b6b6b",
+  textStrong: "#2A3B2C",
+  activeText: "#364D39",
+  activeBg: "rgba(54, 77, 57, 0.10)",
+  activeBorder: "#4A664E",
+  divider: "#E8E0D5",
+  avatarBg: "#364D39",
+  avatarText: "#F4EFEB",
+  pageBg: "#FAF6F3",
   maxWidth: "1120px",
   fontFamily: 'var(--font-sans, "DM Sans", system-ui, sans-serif)',
 };
@@ -81,21 +95,33 @@ function isNavActive(pathname: string, to: string, allNavItems: NavItem[]) {
 }
 
 function formatRoleLabel(role?: string) {
-  if (role === "marketing_sale") return "MARKETING & CSKH";
-  return role ? role.replace(/_/g, " ").toUpperCase() : "OFFICE";
+  switch (role) {
+    case 'owner': return 'CHỦ QUÁN';
+    case 'platform_admin': return 'QUẢN TRỊ HỆ THỐNG';
+    case 'store_manager': return 'QUẢN LÝ CỬA HÀNG';
+    case 'staff': return 'NHÂN VIÊN';
+    default: return role ? role.replace(/_/g, ' ').toUpperCase() : 'OFFICE';
+  }
 }
 
 export default function OfficeWorkspaceLayout({ children }: PropsWithChildren) {
   const logout = useAuthStore((s) => s.logout);
   const user = useAuthStore((s) => s.user);
   const location = useLocation();
+  const navigate = useNavigate();
   const isMobile = useIsMobileViewport();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const userRoles = user?.roles ?? [];
-  const navItems = ALL_NAV.filter((item) => item.roles.some((role) => userRoles.includes(role)));
+
+  // Owner thấy tất cả nav items (superuser bypass)
+  const showOwner = isOwnerOrAdmin(user);
+  const navItems = showOwner
+    ? ALL_NAV
+    : ALL_NAV.filter((item) => item.roles.some((role) => userRoles.includes(role)));
+
   const isHrSurface = location.pathname.startsWith("/office/hr");
   const theme = isHrSurface ? hrTheme : officeTheme;
-  const homePath = isHrSurface ? "/office/hr" : "/office";
+  const homePath = isHrSurface ? "/office/hr" : "/office/dashboard";
   const userDisplayName = user?.fullName || user?.username || "Tài khoản office";
 
   useEffect(() => {
@@ -112,7 +138,7 @@ export default function OfficeWorkspaceLayout({ children }: PropsWithChildren) {
           textDecoration: "none",
           color: theme.brand,
           fontFamily: "inherit",
-          fontSize: "1.7rem",
+          fontSize: "1.5rem",
           fontWeight: 800,
           letterSpacing: "-0.02em",
           lineHeight: 1,
@@ -121,7 +147,7 @@ export default function OfficeWorkspaceLayout({ children }: PropsWithChildren) {
           padding: "4px 8px 6px",
         }}
       >
-        kōhī coffee
+        KONEKT Coffee
       </Link>
 
       <nav style={{ flex: 1, display: "flex", flexDirection: "column", gap: 4 }}>
@@ -255,7 +281,7 @@ export default function OfficeWorkspaceLayout({ children }: PropsWithChildren) {
               style={{
                 border: `1px solid ${theme.headerBorder}`,
                 borderRadius: 10,
-                background: "#fffdf9",
+                background: "#FDFCFA",
                 color: theme.textStrong,
                 fontSize: 14,
                 fontWeight: 700,
@@ -265,6 +291,46 @@ export default function OfficeWorkspaceLayout({ children }: PropsWithChildren) {
               }}
             >
               Menu
+            </button>
+          ) : null}
+
+          {/* ── NÚT CHUYỂN ĐỔI POS — Chỉ hiển thị cho Owner (PLAN-01 Bước 3 / US-1) ── */}
+          {showOwner ? (
+            <button
+              type="button"
+              onClick={() => navigate('/pos/order')}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 8,
+                border: 'none',
+                borderRadius: 10,
+                background: '#364D39',
+                color: '#F4EFEB',
+                fontSize: 13,
+                fontWeight: 700,
+                cursor: 'pointer',
+                padding: '9px 18px',
+                letterSpacing: 0.2,
+                transition: 'all 200ms ease',
+                boxShadow: '0 2px 8px rgba(54, 77, 57, 0.18)',
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = '#4A664E';
+                e.currentTarget.style.boxShadow = '0 4px 12px rgba(54, 77, 57, 0.25)';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = '#364D39';
+                e.currentTarget.style.boxShadow = '0 2px 8px rgba(54, 77, 57, 0.18)';
+              }}
+            >
+              {/* SVG icon inline — tuân thủ AI_RULES #4: chỉ dùng icon JS inline */}
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="2" y="3" width="20" height="14" rx="2" ry="2"/>
+                <line x1="8" y1="21" x2="16" y2="21"/>
+                <line x1="12" y1="17" x2="12" y2="21"/>
+              </svg>
+              Mở POS Bán Hàng
             </button>
           ) : null}
           <div

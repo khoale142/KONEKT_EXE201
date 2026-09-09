@@ -5,6 +5,7 @@ import { useOnlineCartStore } from "../../features/member-orders/store/onlineCar
 import { useMemberResumePendingOrder } from "../../features/member-orders/hooks/useMemberResumePendingOrder";
 import NotificationBell from "../../features/notifications/components/NotificationBell";
 import useIsMobileViewport from "../hooks/useIsMobileViewport";
+import { Coffee } from "lucide-react";
 
 function isExactPath(pathname: string, target: string) {
   return pathname === target;
@@ -58,8 +59,10 @@ export default function CafeHeader() {
   return (
     <>
       <header className="cafe-header">
-        <Link to="/" className="cafe-logo">
-          kōhī coffee
+        <Link to="/" className="cafe-logo" style={{ display: "inline-flex", alignItems: "center", gap: 8, textDecoration: "none" }}>
+          <Coffee size={22} strokeWidth={2.4} />
+          <span style={{ fontWeight: 800, letterSpacing: "-0.02em" }}>KONEKT</span>
+          <span style={{ fontSize: "0.85rem", opacity: 0.8, fontWeight: 500 }}>Coffee POS</span>
         </Link>
         {isMobile ? (
           <>
@@ -155,21 +158,49 @@ export default function CafeHeader() {
             </>
           )}
           {isLoggedIn ? (
-            <button
-              type="button"
-              className="cafe-btn-primary cafe-nav__auth-btn"
-              onClick={handleLogout}
-            >
-              Đăng xuất
-            </button>
+            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              {user?.roles?.includes("owner") && (
+                <Link
+                  to="/office"
+                  className="cafe-btn-secondary"
+                  style={{ textDecoration: "none", fontSize: "0.85rem", padding: "6px 14px" }}
+                >
+                  Trang Quản trị
+                </Link>
+              )}
+              <button
+                type="button"
+                className="cafe-btn-primary cafe-nav__auth-btn"
+                onClick={handleLogout}
+              >
+                Đăng xuất
+              </button>
+            </div>
           ) : (
-            <Link
-              to="/login/customer"
-              className="cafe-btn-primary cafe-nav__auth-btn"
-              style={{ textDecoration: "none" }}
-            >
-              Đăng nhập
-            </Link>
+            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              <Link
+                to="/register/owner"
+                className="cafe-btn-secondary"
+                style={{
+                  textDecoration: "none",
+                  fontSize: "0.85rem",
+                  padding: "6px 14px",
+                  borderRadius: "999px",
+                  border: "1.5px solid var(--cafe-olive)",
+                  fontWeight: 600,
+                  whiteSpace: "nowrap",
+                }}
+              >
+                Đăng ký mở quán
+              </Link>
+              <Link
+                to="/"
+                className="cafe-btn-primary cafe-nav__auth-btn"
+                style={{ textDecoration: "none", whiteSpace: "nowrap" }}
+              >
+                Đăng nhập
+              </Link>
+            </div>
           )}
         </nav>
       </header>
