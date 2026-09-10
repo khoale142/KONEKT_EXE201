@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { Building2 } from "lucide-react";
 import { useAuthStore, isOwnerOrAdmin } from "../../../app/store/auth.store";
 import {
   posOrderIssuesApi,
@@ -174,7 +175,7 @@ export default function PosPickupSelectPage() {
             {isOwnerOrAdmin(user) && (
               <button
                 style={{
-                  background: "#2B402D",
+                  background: "#3D5E46",
                   color: "#FAF6F3",
                   border: "none",
                   borderRadius: 14,
@@ -187,7 +188,9 @@ export default function PosPickupSelectPage() {
                 }}
                 onClick={() => nav("/office/dashboard")}
               >
-                🏢 Về Quản trị
+                <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                  <Building2 size={16} /> Về Quản trị
+                </span>
               </button>
             )}
           </div>

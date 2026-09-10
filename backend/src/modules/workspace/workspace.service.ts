@@ -562,7 +562,7 @@ export async function approveStoreJoinRequest(
   approverUserId: number,
   tenantId: number,
   params: {
-    role: "store_manager" | "staff";
+    role: "store_manager" | "shift_leader" | "staff";
     storeId?: number;
     customPermissions?: string[];
   }

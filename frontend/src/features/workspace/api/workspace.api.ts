@@ -57,6 +57,7 @@ export interface PermissionDefinition {
   label: string;
   description: string;
   defaultManager: boolean;
+  defaultLeader?: boolean;
   defaultStaff: boolean;
 }
 
@@ -103,6 +104,7 @@ export const workspaceApi = {
   submitJoinStoreRequest: async (payload: {
     storeInviteCode: string;
     fullName: string;
+    email?: string;
     phone?: string;
     desiredPosition?: string;
     note?: string;
@@ -129,7 +131,7 @@ export const workspaceApi = {
   approveStaffRequest: async (
     requestId: number,
     payload: {
-      role: "store_manager" | "staff";
+      role: "store_manager" | "shift_leader" | "staff";
       storeId?: number;
       customPermissions?: string[];
     }

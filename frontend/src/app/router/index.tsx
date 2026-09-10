@@ -14,6 +14,8 @@ import PortalSelectPage from "../../features/auth/pages/PortalSelectPage";
 import CustomerLoginPage from "../../features/auth/pages/CustomerLoginPage";
 import CustomerRegisterPage from "../../features/auth/pages/CustomerRegisterPage";
 import OwnerRegisterPage from "../../features/auth/pages/OwnerRegisterPage";
+import StaffRegisterPage from "../../features/auth/pages/StaffRegisterPage";
+import StaffJoinStorePage from "../../features/workspace/pages/StaffJoinStorePage";
 import CustomerForgotPasswordPage from "../../features/auth/pages/CustomerForgotPasswordPage";
 import CustomerResetOtpPage from "../../features/auth/pages/CustomerResetOtpPage";
 import CustomerResetPasswordPage from "../../features/auth/pages/CustomerResetPasswordPage";
@@ -299,6 +301,10 @@ const router = createBrowserRouter([
     element: <SelectStorePage />,
   },
   {
+    path: "/workspace/join-store",
+    element: <StaffJoinStorePage />,
+  },
+  {
     path: "/login",
     element: <MerchantLoginPage />,
   },
@@ -317,6 +323,10 @@ const router = createBrowserRouter([
   {
     path: "/register/owner",
     element: <OwnerRegisterPage />,
+  },
+  {
+    path: "/register/staff",
+    element: <StaffRegisterPage />,
   },
   {
     path: "/register/customer",

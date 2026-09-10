@@ -282,7 +282,7 @@ export const storeRoleToBasePath = (roles?: string[]) => {
   const list = roles || [];
   if (list.includes("owner") || list.includes("platform_admin")) return "/store/manager";
   if (list.includes("store_manager")) return "/store/manager";
-  if (list.includes("staff")) return "/store/staff";
+  if (list.includes("shift_leader") || list.includes("staff")) return "/store/staff";
   return "/store";
 };
 

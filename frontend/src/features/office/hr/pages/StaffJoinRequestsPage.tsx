@@ -25,7 +25,7 @@ export default function StaffJoinRequestsPage() {
 
   // Modal Approve & Granular Permissions
   const [approvingReq, setApprovingReq] = useState<StoreJoinRequestItem | null>(null);
-  const [selectedRole, setSelectedRole] = useState<"store_manager" | "staff">("staff");
+  const [selectedRole, setSelectedRole] = useState<"store_manager" | "shift_leader" | "staff">("staff");
   const [activePermissions, setActivePermissions] = useState<string[]>([]);
   const [approving, setApproving] = useState(false);
 
@@ -57,24 +57,36 @@ export default function StaffJoinRequestsPage() {
 
   const openApproveModal = (req: StoreJoinRequestItem) => {
     setApprovingReq(req);
-    // Mặc định vai trò theo vị trí hoặc staff
-    const isManagerPosition =
-      req.desiredPosition?.toLowerCase().includes("quản lý") ||
-      req.desiredPosition?.toLowerCase().includes("manager");
-    const initRole: "store_manager" | "staff" = isManagerPosition ? "store_manager" : "staff";
+    const pos = req.desiredPosition?.toLowerCase() || "";
+    let initRole: "store_manager" | "shift_leader" | "staff" = "staff";
+
+    if (pos.includes("quản lý") || pos.includes("manager")) {
+      initRole = "store_manager";
+    } else if (pos.includes("trưởng ca") || pos.includes("leader")) {
+      initRole = "shift_leader";
+    }
+
     setSelectedRole(initRole);
 
     // Bật các quyền mặc định theo role
     const defaultPerms = permissionDefs
-      .filter((p) => (initRole === "store_manager" ? p.defaultManager : p.defaultStaff))
+      .filter((p) => {
+        if (initRole === "store_manager") return p.defaultManager;
+        if (initRole === "shift_leader") return p.defaultLeader ?? p.defaultStaff;
+        return p.defaultStaff;
+      })
       .map((p) => p.key);
     setActivePermissions(defaultPerms);
   };
 
-  const handleRoleChange = (role: "store_manager" | "staff") => {
+  const handleRoleChange = (role: "store_manager" | "shift_leader" | "staff") => {
     setSelectedRole(role);
     const defaultPerms = permissionDefs
-      .filter((p) => (role === "store_manager" ? p.defaultManager : p.defaultStaff))
+      .filter((p) => {
+        if (role === "store_manager") return p.defaultManager;
+        if (role === "shift_leader") return p.defaultLeader ?? p.defaultStaff;
+        return p.defaultStaff;
+      })
       .map((p) => p.key);
     setActivePermissions(defaultPerms);
   };
@@ -416,7 +428,7 @@ export default function StaffJoinRequestsPage() {
                         )}
                         {r.status === "approved" && (
                           <span style={{ background: "#F0FDF4", color: "#166534", border: "1px solid #BBF7D0", padding: "3px 8px", borderRadius: 6, fontSize: "0.75rem", fontWeight: 700 }}>
-                            Đã duyệt ({r.assignedRole === "store_manager" ? "Quản lý" : "Staff"})
+                            Đã duyệt ({r.assignedRole === "store_manager" ? "Quản lý" : r.assignedRole === "shift_leader" ? "Trưởng ca" : "Nhân viên"})
                           </span>
                         )}
                         {r.status === "rejected" && (
@@ -538,45 +550,67 @@ export default function StaffJoinRequestsPage() {
 
             {/* 1. Chọn Base Role */}
             <div style={{ marginBottom: 18 }}>
-              <label style={{ display: "block", fontSize: "0.82rem", fontWeight: 700, marginBottom: 8 }}>
+              <label style={{ display: "block", fontSize: "0.82rem", fontWeight: 700, marginBottom: 8, color: "#2A3B2C" }}>
                 1. Vai trò phân công (Base Role)
               </label>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 8 }}>
+                {/* Staff */}
                 <div
                   onClick={() => handleRoleChange("staff")}
                   style={{
-                    border: `2px solid ${selectedRole === "staff" ? "#2B402D" : "#D1DBD2"}`,
+                    border: `2px solid ${selectedRole === "staff" ? "#3D5E46" : "#DFD6C7"}`,
                     background: selectedRole === "staff" ? "#EBF3EC" : "#FFFFFF",
                     borderRadius: 10,
-                    padding: "12px 14px",
+                    padding: "10px 12px",
                     cursor: "pointer",
                     transition: "all 0.15s ease",
                   }}
                 >
-                  <div style={{ fontWeight: 800, fontSize: "0.95rem", color: "#2B402D" }}>
-                    Nhân Viên Vận Hành (staff)
+                  <div style={{ fontWeight: 800, fontSize: "0.88rem", color: "#27402F" }}>
+                    Nhân Viên (staff)
                   </div>
-                  <div style={{ fontSize: "0.78rem", color: "#687668", marginTop: 2 }}>
-                    Thu ngân, bán hàng POS, pha chế.
+                  <div style={{ fontSize: "0.75rem", color: "#556B5A", marginTop: 4, lineHeight: 1.4 }}>
+                    Bán hàng POS, Bếp KDS, chấm công ca.
                   </div>
                 </div>
 
+                {/* Shift Leader */}
                 <div
-                  onClick={() => handleRoleChange("store_manager")}
+                  onClick={() => handleRoleChange("shift_leader")}
                   style={{
-                    border: `2px solid ${selectedRole === "store_manager" ? "#2B402D" : "#D1DBD2"}`,
-                    background: selectedRole === "store_manager" ? "#EBF3EC" : "#FFFFFF",
+                    border: `2px solid ${selectedRole === "shift_leader" ? "#3D5E46" : "#DFD6C7"}`,
+                    background: selectedRole === "shift_leader" ? "#EBF3EC" : "#FFFFFF",
                     borderRadius: 10,
-                    padding: "12px 14px",
+                    padding: "10px 12px",
                     cursor: "pointer",
                     transition: "all 0.15s ease",
                   }}
                 >
-                  <div style={{ fontWeight: 800, fontSize: "0.95rem", color: "#2B402D" }}>
-                    Quản Lý Cửa Hàng (store_manager)
+                  <div style={{ fontWeight: 800, fontSize: "0.88rem", color: "#27402F" }}>
+                    Trưởng Ca (leader)
                   </div>
-                  <div style={{ fontSize: "0.78rem", color: "#687668", marginTop: 2 }}>
-                    Điều phối ca, kiểm kho, báo cáo cửa hàng.
+                  <div style={{ fontSize: "0.75rem", color: "#556B5A", marginTop: 4, lineHeight: 1.4 }}>
+                    Toàn quyền Staff + Chốt ca kiểm quỹ, duyệt kiểm hàng ca.
+                  </div>
+                </div>
+
+                {/* Store Manager */}
+                <div
+                  onClick={() => handleRoleChange("store_manager")}
+                  style={{
+                    border: `2px solid ${selectedRole === "store_manager" ? "#3D5E46" : "#DFD6C7"}`,
+                    background: selectedRole === "store_manager" ? "#EBF3EC" : "#FFFFFF",
+                    borderRadius: 10,
+                    padding: "10px 12px",
+                    cursor: "pointer",
+                    transition: "all 0.15s ease",
+                  }}
+                >
+                  <div style={{ fontWeight: 800, fontSize: "0.88rem", color: "#27402F" }}>
+                    Quản Lý (manager)
+                  </div>
+                  <div style={{ fontSize: "0.75rem", color: "#556B5A", marginTop: 4, lineHeight: 1.4 }}>
+                    Toàn quyền Leader + Phân ca, duyệt đổi ca, xem báo cáo doanh thu.
                   </div>
                 </div>
               </div>

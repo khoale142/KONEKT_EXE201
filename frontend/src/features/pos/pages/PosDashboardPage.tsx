@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import { Building2 } from "lucide-react";
 import { useAuthStore, isOwnerOrAdmin } from "../../../app/store/auth.store";
 
 type DashboardActionItem = {
@@ -263,13 +264,13 @@ export default function PosDashboardPage() {
                 minHeight: 112,
                 border: "none",
                 borderRadius: 24,
-                background: "#2B402D",
+                background: "#3D5E46",
                 color: "#FAF6F3",
                 fontSize: 15,
                 fontWeight: 700,
                 fontFamily: "inherit",
                 cursor: "pointer",
-                boxShadow: "0 8px 18px rgba(43, 64, 45, 0.15)",
+                boxShadow: "0 8px 18px rgba(61, 94, 70, 0.15)",
                 display: "flex",
                 flexDirection: "column",
                 alignItems: "center",
@@ -278,7 +279,7 @@ export default function PosDashboardPage() {
                 padding: "10px 14px",
               }}
             >
-              <span style={{ fontSize: 18 }}>🏢</span>
+              <Building2 size={22} />
               <span>Về Quản Trị</span>
               <span style={{ fontSize: 11, fontWeight: 500, opacity: 0.8 }}>
                 (Office Hub)

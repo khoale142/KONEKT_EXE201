@@ -48,18 +48,18 @@ table {
    ────────────────────────────────────────────────────────────────────── */
 :root,
 .cafe-theme {
-  /* ── Xanh rêu thương hiệu (Primary / Brand #3D503C) ── */
-  --cafe-olive: #3D503C;
-  --cafe-olive-light: #50694F;
-  --cafe-olive-dark: #2A3B2A;
-  --cafe-olive-hover: #465B45;
-  --cafe-olive-muted: rgba(61, 80, 60, 0.12);
+  /* ── Xanh rêu thương hiệu tông sáng (Bright Sage Moss #3D5E46) ── */
+  --cafe-olive: #3D5E46;
+  --cafe-olive-light: #4F765A;
+  --cafe-olive-dark: #2F4B36;
+  --cafe-olive-hover: #486E53;
+  --cafe-olive-muted: rgba(61, 94, 70, 0.12);
 
-  /* ── Kem nhẹ thanh lịch #F8F6F1 (thay thế màu vàng ố cũ) ── */
-  --cafe-cream: #F8F6F1;
-  --cafe-cream-dark: #E8E3DA;
-  --cafe-cream-light: #FCFBF9;
-  --cafe-white: #FFFFFF;
+  /* ── Kem sữa đậm đà ấm áp (Warm Milky Cream #EFE9DF / #FAF7F2) ── */
+  --cafe-cream: #EFE9DF;
+  --cafe-cream-dark: #E2DACD;
+  --cafe-cream-light: #FAF7F2;
+  --cafe-white: #FAF7F2;
 
   /* ── Accent / Brown ── */
   --cafe-brown: #6b5344;
