@@ -19,9 +19,11 @@ import {
 function getStoreIdFromReq(req: Request): number {
   const u = req.user;
   if (!u) throw new ApiError(401, "Unauthorized");
-  if (u.portal !== "POS") throw new ApiError(403, "Forbidden (portal)");
-  if (!u.storeId) throw new ApiError(400, "POS missing storeId");
-  return Number(u.storeId);
+  const isCrossPortal = (u.roles || []).some((r: string) => ["owner", "platform_admin"].includes(r));
+  if (u.portal !== "POS" && !isCrossPortal) throw new ApiError(403, "Forbidden (portal)");
+  const sid = u.storeId || (isCrossPortal && u.storeIds && u.storeIds[0]);
+  if (!sid) throw new ApiError(400, "POS missing storeId");
+  return Number(sid);
 }
 
 export const openPosShiftReconciliation = asyncHandler(

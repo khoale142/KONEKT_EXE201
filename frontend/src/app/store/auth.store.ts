@@ -16,13 +16,17 @@ export type AuthUser = {
   sub: string;
   username?: string;
   fullName?: string;
+  email?: string;
   portal: Portal;
   roles?: string[];
   tenantId?: number;      // Multi-tenant: ID thương hiệu (REQ-01)
+  tenantName?: string;
+  tenantCode?: string;
   storeIds?: number[];
   storeId?: number;
   storeName?: string;
   stores?: AuthStoreItem[];
+  customPermissions?: string[]; // Granular permissions (can_invite_staff, can_view_revenue, etc.)
 };
 
 /** Kiểm tra user có phải Owner hoặc Platform Admin không (PLAN-01) */
@@ -35,6 +39,13 @@ export const isOwnerOrAdmin = (user: AuthUser | null): boolean => {
 export const isOwner = (user: AuthUser | null): boolean => {
   if (!user?.roles) return false;
   return user.roles.includes('owner');
+};
+
+/** Kiểm tra quyền hạn chi tiết (Granular Permission Check) */
+export const hasPermission = (user: AuthUser | null, permission: string): boolean => {
+  if (!user) return false;
+  if (isOwnerOrAdmin(user)) return true; // Owner & Admin luôn có toàn quyền
+  return user.customPermissions?.includes(permission) ?? false;
 };
 
 export type CustomerCheckinFlash = {

@@ -11,8 +11,9 @@ router.use(authGuard, portalGuard(["POS"]));
 
 router.get(
   "/",
-  asyncHandler(async (_req, res) => {
-    const data = await getPosMenu();
+  asyncHandler(async (req, res) => {
+    const tenantId = (req as any).user?.tenantId;
+    const data = await getPosMenu(tenantId);
     res.json(data);
   })
 );

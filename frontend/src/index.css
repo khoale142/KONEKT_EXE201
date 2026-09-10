@@ -1,8 +1,9 @@
-@import url("https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,600;0,700;1,400&family=DM+Sans:ital,opsz,wght@0,9..40,100..1000;1,9..40,100..1000&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;1,400&family=Cormorant+Garamond:ital,wght@0,400;0,600;0,700;1,400&display=swap");
 
 :root {
-  font-family: 'DM Sans', 'Segoe UI', Roboto, Arial, system-ui, sans-serif;
-  line-height: 1.6;
+  --font-sans: 'Be Vietnam Pro', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-family: var(--font-sans);
+  line-height: 1.5;
   font-weight: 400;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
@@ -15,47 +16,60 @@ html {
 }
 
 body {
-  font-family: inherit;
-  font-size: inherit;
-  line-height: inherit;
+  font-family: var(--font-sans);
+  font-size: 14px;
+  line-height: 1.5;
+  background: var(--cafe-cream);
+  color: var(--cafe-text);
 }
 
 button,
 input,
 select,
 textarea {
-  font-family: inherit;
+  font-family: var(--font-sans);
+}
+
+table {
+  font-family: var(--font-sans);
+}
+
+.text-right {
+  text-align: right !important;
+}
+
+.tabular-nums {
+  font-variant-numeric: tabular-nums !important;
 }
 
 /* ──────────────────────────────────────────────────────────────────────
-   KONEKT Brand Palette – Xanh rêu đậm (Dark Moss Green) & Kem ngà (Warm Ivory Cream)
-   Tuân thủ AI_RULES.md Quy tắc #5: Chỉ thay đổi sắc độ (tints/shades) để tạo
-   sự khác biệt, tương phản và phân cấp thị giác.
+   KONEKT Brand Palette – Xanh rêu đậm (Dark Moss Green) & Kem nhẹ #F8F6F1
+   Tuân thủ PLAN-06: Đổi nền sang #F8F6F1 dịu mắt, đồng bộ typography.
    ────────────────────────────────────────────────────────────────────── */
 :root,
 .cafe-theme {
-  /* ── Xanh rêu đậm (Primary / Brand) ── */
-  --cafe-olive: #364D39;
-  --cafe-olive-light: #4A664E;
-  --cafe-olive-dark: #2A3B2C;
-  --cafe-olive-hover: #3E5A42;
-  --cafe-olive-muted: rgba(54, 77, 57, 0.15);
+  /* ── Xanh rêu thương hiệu (Primary / Brand #3D503C) ── */
+  --cafe-olive: #3D503C;
+  --cafe-olive-light: #50694F;
+  --cafe-olive-dark: #2A3B2A;
+  --cafe-olive-hover: #465B45;
+  --cafe-olive-muted: rgba(61, 80, 60, 0.12);
 
-  /* ── Kem ngà (Background / Surface) ── */
-  --cafe-cream: #F4EFEB;
-  --cafe-cream-dark: #E8E0D5;
-  --cafe-cream-light: #FAF6F3;
-  --cafe-white: #FDFCFA;
+  /* ── Kem nhẹ thanh lịch #F8F6F1 (thay thế màu vàng ố cũ) ── */
+  --cafe-cream: #F8F6F1;
+  --cafe-cream-dark: #E8E3DA;
+  --cafe-cream-light: #FCFBF9;
+  --cafe-white: #FFFFFF;
 
-  /* ── Accent / Brown (Secondary — derived from original) ── */
+  /* ── Accent / Brown ── */
   --cafe-brown: #6b5344;
   --cafe-brown-light: #8b7355;
   --cafe-brown-dark: #5a4538;
 
   /* ── Text ── */
-  --cafe-text: #2c2c2c;
-  --cafe-text-muted: #6b6b6b;
-  --cafe-text-on-primary: #F4EFEB;
+  --cafe-text: #1E261F;
+  --cafe-text-muted: #5A685B;
+  --cafe-text-on-primary: #FFFFFF;
 
   /* ── Semantic ── */
   --cafe-error: #c0392b;
@@ -64,15 +78,27 @@ textarea {
   --cafe-info: #2980b9;
 
   /* ── Shadows & Borders ── */
-  --cafe-shadow-sm: 0 1px 3px rgba(42, 59, 44, 0.08);
-  --cafe-shadow-md: 0 4px 12px rgba(42, 59, 44, 0.10);
-  --cafe-shadow-lg: 0 8px 24px rgba(42, 59, 44, 0.12);
-  --cafe-border: #E8E0D5;
-  --cafe-border-light: rgba(232, 224, 213, 0.6);
+  --cafe-shadow-sm: 0 1px 3px rgba(45, 62, 47, 0.05);
+  --cafe-shadow-md: 0 4px 16px -2px rgba(45, 62, 47, 0.07), 0 2px 6px -1px rgba(0, 0, 0, 0.03);
+  --cafe-shadow-lg: 0 10px 28px -4px rgba(45, 62, 47, 0.10), 0 4px 10px -2px rgba(0, 0, 0, 0.04);
+  --cafe-border: #E8E3DA;
+  --cafe-border-light: rgba(232, 227, 218, 0.8);
 
   /* ── Transition ── */
   --cafe-transition: 200ms cubic-bezier(0.4, 0, 0.2, 1);
 }
+
+@keyframes navFlyoutFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-50%) translateX(-6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(-50%) translateX(0);
+  }
+}
+
 
 body {
   margin: 0;
@@ -80,7 +106,7 @@ body {
   min-height: 100vh;
   background: var(--cafe-cream);
   color: var(--cafe-text);
-  font-family: 'DM Sans', 'Segoe UI', Roboto, Arial, system-ui, sans-serif;
+  font-family: var(--font-sans);
 }
 
 a {

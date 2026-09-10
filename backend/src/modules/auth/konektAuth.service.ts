@@ -232,9 +232,11 @@ export async function loginKonekt(identifier: string, passwordPlain: string) {
   if (!isMatch) throw new ApiError(401, "Sai email/tài khoản hoặc mật khẩu");
 
   // Lấy các chi nhánh thuộc tenant
-  const tenantStores = await db.query.stores.findMany({
-    where: eq(stores.tenantId, user.tenantId),
-  });
+  const tenantStores = user.tenantId
+    ? await db.query.stores.findMany({
+        where: eq(stores.tenantId, user.tenantId),
+      })
+    : [];
 
   const storeList = tenantStores.map((s) => ({
     id: s.id,
@@ -260,7 +262,7 @@ export async function loginKonekt(identifier: string, passwordPlain: string) {
     sub: String(user.id),
     portal,
     roles: [user.role],
-    tenantId: user.tenantId,
+    tenantId: user.tenantId ?? undefined,
     storeIds,
     storeId: defaultStoreId,
   };
@@ -312,9 +314,11 @@ export async function demoLogin(role: "owner" | "manager" | "staff") {
     throw new ApiError(404, `Chưa tìm thấy tài khoản mẫu cho vai trò ${role}. Vui lòng chạy db:seed.`);
   }
 
-  const tenantStores = await db.query.stores.findMany({
-    where: eq(stores.tenantId, user.tenantId),
-  });
+  const tenantStores = user.tenantId
+    ? await db.query.stores.findMany({
+        where: eq(stores.tenantId, user.tenantId),
+      })
+    : [];
   const storeList = tenantStores.map((s) => ({ id: s.id, name: s.name }));
   const storeIds = storeList.map((s) => s.id);
   const defaultStoreId = user.storeId || storeIds[0];
@@ -332,7 +336,7 @@ export async function demoLogin(role: "owner" | "manager" | "staff") {
     sub: String(user.id),
     portal,
     roles: [user.role],
-    tenantId: user.tenantId,
+    tenantId: user.tenantId ?? undefined,
     storeIds,
     storeId: defaultStoreId,
   };

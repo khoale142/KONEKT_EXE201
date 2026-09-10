@@ -10,6 +10,7 @@ export type AccessClaims = {
   tenantId?: number;      // Multi-tenant: ID thương hiệu (REQ-01)
   storeIds?: number[];    // staff/office: nhieu store
   storeId?: number;       // POS: 1 store
+  permissions?: string[]; // Granular custom permissions (can_invite_staff, can_view_revenue, etc.)
 };
 
 // Khi verify token, jsonwebtoken có thể trả về iat/exp (reserved claims)

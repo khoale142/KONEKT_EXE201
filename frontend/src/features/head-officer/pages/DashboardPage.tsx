@@ -8,6 +8,29 @@ import {
   type Complaint,
 } from "../api/head-officer.api";
 import { formatDate } from "../../../utils/dateUtils";
+import {
+  Activity,
+  DollarSign,
+  TrendingUp,
+  Trash2,
+  ClipboardCheck,
+  PackageCheck,
+  MessageSquareWarning,
+  Filter,
+  BarChart3,
+  ShieldAlert,
+  ClockAlert,
+  CheckCircle2,
+  Store as StoreIcon,
+  User as UserIcon,
+  Trophy,
+  Sparkles,
+  AlertTriangle,
+  AlertCircle,
+  ArrowUpRight,
+  ArrowRight,
+  Loader2,
+} from "lucide-react";
 
 /* ── Helpers ── */
 function fmtShort(n: number) {
@@ -33,55 +56,63 @@ function isDataAnomaly(text: string): boolean {
   return false;
 }
 
-/** CTA label + href rõ nghiệp vụ theo loại insight */
+/** CTA label + href rõ nghiệp vụ theo loại insight (100% không dùng emoji unicode) */
 function insightCTA(type: string): { label: string; to: string } {
-  if (/waste|hủy/i.test(type))   return { label: "📦 Xem báo cáo Hàng hủy", to: "/office/dm/inventory-waste" };
-  if (/stock|tồn|kho/i.test(type)) return { label: "📦 Xem tồn kho", to: "/office/dm/inventory-waste" };
-  if (/profit|lợi nhuận|margin/i.test(type)) return { label: "📊 Xem báo cáo Doanh thu/Chi phí", to: "/office/reports/revenue" };
-  if (/revenue|doanh thu/i.test(type)) return { label: "📊 Xem báo cáo Doanh thu", to: "/office/reports/revenue" };
-  if (/order|đơn/i.test(type))   return { label: "📊 Xem báo cáo Đơn hàng", to: "/office/reports/revenue" };
-  return { label: "📊 Xem báo cáo vận hành", to: "/office/reports/revenue" };
+  if (/waste|hủy/i.test(type))   return { label: "Xem báo cáo Hàng hủy", to: "/office/dm/inventory-waste" };
+  if (/stock|tồn|kho/i.test(type)) return { label: "Xem tồn kho", to: "/office/dm/inventory-waste" };
+  if (/profit|lợi nhuận|margin/i.test(type)) return { label: "Xem báo cáo Doanh thu / P&L", to: "/office/reports/revenue" };
+  if (/revenue|doanh thu/i.test(type)) return { label: "Xem báo cáo Doanh thu", to: "/office/reports/revenue" };
+  if (/order|đơn/i.test(type))   return { label: "Xem báo cáo Đơn hàng", to: "/office/reports/revenue" };
+  return { label: "Xem báo cáo vận hành", to: "/office/reports/revenue" };
 }
 
 const MONTHS = Array.from({ length: 12 }, (_, i) => i + 1);
 const YEARS  = (() => { const y = new Date().getFullYear(); return [y - 2, y - 1, y, y + 1]; })();
 
-/* ── Design tokens ── */
+/* ── Design tokens — Chuẩn KONEKT Xanh rêu đậm & Kem ngà (AI_RULES #5) ── */
 const C = {
-  green:   "#38a169",
-  greenBg: "#f0fff4",
-  olive:   "#3d503c",
-  oliveBg: "#f0fff4",
-  orange:  "#dd6b20",
-  red:     "#e53e3e",
-  dark:    "#1a202c",
-  muted:   "#718096",
-  border:  "#e2e8f0",
-  bg:      "#f7fafc",
-  white:   "#ffffff",
-  yellowBg: "#fffff0",
-  yellowText: "#744210",
-  redBg:   "#fff5f5",
-  redText: "#9b2c2c",
-  indigo:  "#6366f1",
+  primary:      "#364D39",
+  primaryHover: "#2A3B2C",
+  dark:         "#1E2C20",
+  muted:        "#687668",
+  border:       "#E8E0D5",
+  bg:           "#FAF6F3",
+  white:        "#FFFFFF",
+  cardBg:       "#FFFFFF",
+  green:        "#16A34A",
+  greenBg:      "#F0FDF4",
+  greenText:    "#15803D",
+  greenBorder:  "#BBF7D0",
+  orange:       "#D97706",
+  orangeBg:     "#FFFBEB",
+  red:          "#DC2626",
+  redBg:        "#FEF2F2",
+  redText:      "#991B1B",
+  redBorder:    "#FECACA",
+  yellowBg:     "#FEF3C7",
+  yellowText:   "#92400E",
+  yellowBorder: "#FDE68A",
+  indigo:       "#4F46E5",
+  indigoBg:     "#EEF2FF",
+  teal:         "#0F766E",
+  tealBg:       "#F0FDFA",
 };
 
-const shadow = "0 1px 3px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.04)";
-const shadowHover = "0 8px 25px rgba(0,0,0,0.10)";
-const radius = 12;
+const shadow = "0 2px 10px rgba(42, 59, 44, 0.05)";
+const shadowHover = "0 8px 24px rgba(42, 59, 44, 0.10)";
+const radius = 14;
 
 /* ── Hover style injection ── */
 const hoverCSS = `
   .kpi-link { display: block; text-decoration: none; }
-  .kpi-card { transition: transform .15s ease, box-shadow .15s ease; }
-  .kpi-link:hover .kpi-card { transform: translateY(-3px); box-shadow: ${shadowHover}; }
-  .cta-link { text-decoration: none; font-size: 0.78rem; font-weight: 700; transition: opacity .15s; }
+  .kpi-card { transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease; }
+  .kpi-link:hover .kpi-card { transform: translateY(-2px); box-shadow: ${shadowHover}; }
+  .cta-link { text-decoration: none; font-size: 0.80rem; font-weight: 700; transition: opacity .15s; display: inline-flex; align-items: center; gap: 4px; }
   .cta-link:hover { opacity: .75; }
-  .insight-detail-link { text-decoration: none; font-size: 0.72rem; font-weight: 600; opacity: .8; transition: opacity .15s; }
-  .insight-detail-link:hover { opacity: 1; }
+  .insight-detail-link { text-decoration: none; font-size: 0.74rem; font-weight: 700; opacity: .85; transition: opacity .15s; display: inline-flex; align-items: center; gap: 3px; }
+  .insight-detail-link:hover { opacity: 1; text-decoration: underline; }
 `;
 
-// ─────────────────────────────────────────────────────────────────────────────
 export default function DashboardPage() {
   const user = useAuthStore((s) => s.user);
 
@@ -139,7 +170,7 @@ export default function DashboardPage() {
     }
 
     if (rs.status === "rejected" || ins.status === "rejected" || compl.status === "rejected") {
-      setLoadWarning("Một phần dữ liệu tải thất bại. Vui lòng thử tải lại.");
+      setLoadWarning("Một phần dữ liệu tổng hợp chưa tải được hoặc chưa có phát sinh. Bạn có thể bấm chọn bộ lọc để cập nhật lại.");
     }
 
     setLoading(false);
@@ -178,65 +209,140 @@ export default function DashboardPage() {
         .slice(0, 3)
     : [];
 
-  /* ── Styles ── */
+  /* ── Unified Card Style ── */
   const card: React.CSSProperties = {
-    background: C.white, borderRadius: radius, boxShadow: shadow,
+    background: C.white,
+    borderRadius: radius,
+    border: `1px solid ${C.border}`,
+    boxShadow: shadow,
   };
 
   return (
-    <div style={{ background: C.bg, minHeight: "100vh", fontFamily: "inherit" }}>
+    <div style={{ background: "transparent", minHeight: "100%", fontFamily: 'var(--font-sans, "DM Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif)' }}>
       <style>{hoverCSS}</style>
 
-      <div style={{ maxWidth: 1400, margin: "0 auto", padding: "28px 28px" }}>
+      <div style={{ width: "100%", maxWidth: 1400, margin: "0 auto" }}>
 
         {/* ══════════════════════════════════════════════════════════
-            HEADER & BỘ LỌC
+            ALERT NOTIFICATION BANNER
             ══════════════════════════════════════════════════════════ */}
         {loadWarning && (
           <div style={{
-            marginBottom: 14, padding: "10px 12px", borderRadius: 8,
-            background: C.yellowBg, border: "1px solid #f6e05e",
-            color: C.yellowText, fontSize: "0.84rem", fontWeight: 600,
+            marginBottom: 20,
+            padding: "12px 18px",
+            borderRadius: 10,
+            background: C.yellowBg,
+            border: `1px solid ${C.yellowBorder}`,
+            color: C.yellowText,
+            fontSize: "0.85rem",
+            fontWeight: 600,
+            display: "flex",
+            alignItems: "center",
+            gap: 10,
           }}>
-            {loadWarning}
+            <AlertCircle size={18} color={C.yellowText} style={{ flexShrink: 0 }} />
+            <span>{loadWarning}</span>
           </div>
         )}
 
+        {/* ══════════════════════════════════════════════════════════
+            HEADER & BỘ LỌC THỜI GIAN
+            ══════════════════════════════════════════════════════════ */}
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 16, marginBottom: 28 }}>
           <div>
-            <h1 style={{ fontSize: "1.55rem", fontWeight: 800, color: C.dark, margin: 0, letterSpacing: "-0.3px" }}>
-              📊 Monitoring Dashboard
-              <span style={{ fontWeight: 400, color: C.muted, fontSize: "1rem" }}>
-                {" "}— {user?.fullName || "District Manager"}
-              </span>
-            </h1>
-            <p style={{ margin: "4px 0 0", fontSize: "0.82rem", color: C.muted }}>
-              Giám sát hiệu suất & theo dõi vấn đề toàn chuỗi ·{" "}
+            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 4 }}>
+              <div
+                style={{
+                  width: 32,
+                  height: 32,
+                  borderRadius: 8,
+                  background: "rgba(54, 77, 57, 0.12)",
+                  color: C.primary,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+              >
+                <Activity size={18} strokeWidth={2.4} />
+              </div>
+              <h1 style={{ fontSize: "1.65rem", fontWeight: 800, color: C.dark, margin: 0, letterSpacing: "-0.02em" }}>
+                Monitoring Dashboard
+                <span style={{ fontWeight: 500, color: C.muted, fontSize: "1.05rem" }}>
+                  {" "}— {user?.fullName || "Chủ Quán"}
+                </span>
+              </h1>
+            </div>
+            <p style={{ margin: 0, fontSize: "0.84rem", color: C.muted, fontWeight: 500, paddingLeft: 42 }}>
+              Giám sát hiệu suất doanh thu, tồn kho & theo dõi vận hành toàn chuỗi ·{" "}
               {new Date().toLocaleDateString("vi-VN", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}
             </p>
           </div>
 
-          {/* Bộ lọc */}
+          {/* Bộ lọc Styled */}
           <div style={{
-            display: "flex", alignItems: "center", gap: 8, flexWrap: "nowrap",
-            background: C.white, border: `1px solid ${C.border}`, borderRadius: 10, padding: "8px 14px",
+            display: "flex",
+            alignItems: "center",
+            gap: 8,
+            flexWrap: "nowrap",
+            background: C.white,
+            border: `1px solid ${C.border}`,
+            borderRadius: 10,
+            padding: "6px 12px",
+            boxShadow: "0 1px 4px rgba(42, 59, 44, 0.04)",
           }}>
-            <span style={{ fontSize: "0.78rem", fontWeight: 700, color: C.muted, whiteSpace: "nowrap" }}>🔍 Bộ lọc</span>
+            <div style={{ display: "flex", alignItems: "center", gap: 5, color: C.muted, fontSize: "0.80rem", fontWeight: 700, paddingRight: 4 }}>
+              <Filter size={14} />
+              <span>Bộ lọc</span>
+            </div>
             <select
-              value={filterMonth} onChange={(e) => setFilterMonth(Number(e.target.value))}
-              style={{ padding: "5px 8px", borderRadius: 6, border: `1px solid ${C.border}`, fontSize: "0.82rem", color: C.dark, background: C.bg, cursor: "pointer" }}
+              value={filterMonth}
+              onChange={(e) => setFilterMonth(Number(e.target.value))}
+              style={{
+                padding: "6px 10px",
+                borderRadius: 7,
+                border: `1px solid ${C.border}`,
+                fontSize: "0.82rem",
+                fontWeight: 600,
+                color: C.dark,
+                background: "#FAF6F3",
+                cursor: "pointer",
+                outline: "none",
+              }}
             >
               {MONTHS.map((m) => <option key={m} value={m}>Tháng {m}</option>)}
             </select>
             <select
-              value={filterYear} onChange={(e) => setFilterYear(Number(e.target.value))}
-              style={{ padding: "5px 8px", borderRadius: 6, border: `1px solid ${C.border}`, fontSize: "0.82rem", color: C.dark, background: C.bg, cursor: "pointer" }}
+              value={filterYear}
+              onChange={(e) => setFilterYear(Number(e.target.value))}
+              style={{
+                padding: "6px 10px",
+                borderRadius: 7,
+                border: `1px solid ${C.border}`,
+                fontSize: "0.82rem",
+                fontWeight: 600,
+                color: C.dark,
+                background: "#FAF6F3",
+                cursor: "pointer",
+                outline: "none",
+              }}
             >
               {YEARS.map((y) => <option key={y} value={y}>{y}</option>)}
             </select>
             <select
-              value={filterStore} onChange={(e) => setFilterStore(e.target.value ? Number(e.target.value) : "")}
-              style={{ padding: "5px 8px", borderRadius: 6, border: `1px solid ${C.border}`, fontSize: "0.82rem", color: C.dark, background: C.bg, cursor: "pointer", minWidth: 150 }}
+              value={filterStore}
+              onChange={(e) => setFilterStore(e.target.value ? Number(e.target.value) : "")}
+              style={{
+                padding: "6px 10px",
+                borderRadius: 7,
+                border: `1px solid ${C.border}`,
+                fontSize: "0.82rem",
+                fontWeight: 600,
+                color: C.dark,
+                background: "#FAF6F3",
+                cursor: "pointer",
+                minWidth: 150,
+                outline: "none",
+              }}
             >
               <option value="">Tất cả cơ sở</option>
               {storeList.map((s) => <option key={s.store_id} value={s.store_id}>{s.store_name}</option>)}
@@ -245,151 +351,153 @@ export default function DashboardPage() {
         </div>
 
         {loading ? (
-          <div style={{ textAlign: "center", padding: "80px 0", color: C.muted, fontSize: "1rem" }}>
-            <div style={{ fontSize: "2rem", marginBottom: 12 }}>⏳</div>
-            Đang tải dữ liệu...
+          <div style={{ textAlign: "center", padding: "100px 0", color: C.muted, fontSize: "0.95rem" }}>
+            <Loader2 size={36} color={C.primary} className="animate-spin" style={{ margin: "0 auto 14px", animation: "spin 1s linear infinite" }} />
+            <p style={{ margin: 0, fontWeight: 600 }}>Đang cập nhật số liệu thời gian thực...</p>
           </div>
         ) : (
           <>
             {/* ══════════════════════════════════════════════════════════
-                CỤM 1 — KPI CARDS (5 cột)
+                CỤM 1 — KPI CARDS (6 cột chuẩn mực, 100% Lucide Icons)
                 ══════════════════════════════════════════════════════════ */}
             <div style={{ display: "grid", gridTemplateColumns: "repeat(6, minmax(0, 1fr))", gap: 16, marginBottom: 28 }}>
 
-              {/* 💰 Doanh thu */}
+              {/* 1. Doanh thu */}
               <Link to="/office/reports/revenue" className="kpi-link">
-                <div className="kpi-card" style={{ ...card, borderLeft: `4px solid ${C.green}`, padding: "20px 18px" }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
-                    <span style={{ fontSize: "1.4rem" }}>💰</span>
-                    <span style={{ fontSize: "0.75rem", fontWeight: 700, color: C.muted, textTransform: "uppercase", letterSpacing: "0.5px" }}>Doanh thu</span>
+                <div className="kpi-card" style={{ ...card, borderLeft: `4px solid ${C.primary}`, padding: "20px 18px" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
+                    <div style={{ width: 28, height: 28, borderRadius: 7, background: "rgba(54, 77, 57, 0.1)", display: "flex", alignItems: "center", justifyContent: "center", color: C.primary }}>
+                      <DollarSign size={16} strokeWidth={2.4} />
+                    </div>
+                    <span style={{ fontSize: "0.75rem", fontWeight: 800, color: C.muted, textTransform: "uppercase", letterSpacing: "0.6px" }}>Doanh thu</span>
                   </div>
-                  <div style={{ fontSize: "1.45rem", fontWeight: 800, color: C.dark, lineHeight: 1.1, marginBottom: 8 }}>
+                  <div style={{ fontSize: "1.48rem", fontWeight: 800, color: C.dark, lineHeight: 1.1, marginBottom: 8, fontVariantNumeric: "tabular-nums" }}>
                     {fmtShort(curRevenue)} <span style={{ fontSize: "0.85rem", fontWeight: 600 }}>₫</span>
                   </div>
                   {momPct !== null && momPct !== undefined ? (
                     <span style={{
-                      display: "inline-block", padding: "3px 10px", borderRadius: 6, fontSize: "0.74rem", fontWeight: 700,
+                      display: "inline-block", padding: "3px 9px", borderRadius: 6, fontSize: "0.74rem", fontWeight: 700,
                       background: momPct >= 0 ? C.greenBg : C.redBg,
-                      color: momPct >= 0 ? C.green : C.red,
+                      color: momPct >= 0 ? C.greenText : C.redText,
+                      border: `1px solid ${momPct >= 0 ? C.greenBorder : C.redBorder}`,
                     }}>
                       {momPct >= 0 ? "▲" : "▼"} {Math.abs(momPct)}% vs tháng trước
                     </span>
                   ) : (
-                    <span style={{ fontSize: "0.74rem", color: C.muted }}>Chưa có dữ liệu kỳ trước</span>
+                    <span style={{ fontSize: "0.74rem", color: C.muted, fontWeight: 500 }}>Chưa có dữ liệu kỳ trước</span>
                   )}
                 </div>
               </Link>
 
-              {/* 📈 Hiệu quả cơ sở */}
+              {/* 2. Hiệu quả cơ sở */}
               <Link to="/office/reports/revenue" className="kpi-link">
-                <div className="kpi-card" style={{ ...card, borderLeft: `4px solid ${C.olive}`, padding: "20px 18px" }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
-                    <span style={{ fontSize: "1.4rem" }}>📈</span>
-                    <span style={{ fontSize: "0.75rem", fontWeight: 700, color: C.muted, textTransform: "uppercase", letterSpacing: "0.5px" }}>Hiệu quả cơ sở</span>
+                <div className="kpi-card" style={{ ...card, borderLeft: `4px solid #2A3B2C`, padding: "20px 18px" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
+                    <div style={{ width: 28, height: 28, borderRadius: 7, background: "rgba(42, 59, 44, 0.1)", display: "flex", alignItems: "center", justifyContent: "center", color: "#2A3B2C" }}>
+                      <TrendingUp size={16} strokeWidth={2.4} />
+                    </div>
+                    <span style={{ fontSize: "0.75rem", fontWeight: 800, color: C.muted, textTransform: "uppercase", letterSpacing: "0.6px" }}>Hiệu quả chuỗi</span>
                   </div>
-                  <div style={{ fontSize: "1.45rem", fontWeight: 800, color: C.dark, lineHeight: 1.1, marginBottom: 8 }}>
+                  <div style={{ fontSize: "1.48rem", fontWeight: 800, color: C.dark, lineHeight: 1.1, marginBottom: 8 }}>
                     {goodStoreCount !== null
-                      ? <>{goodStoreCount}<span style={{ fontSize: "0.85rem", fontWeight: 600 }}>/{insights!.stores.length} tốt</span></>
+                      ? <>{goodStoreCount}<span style={{ fontSize: "0.85rem", fontWeight: 600, color: C.muted }}>/{insights!.stores.length} tốt</span></>
                       : "—"}
                   </div>
                   {goodStoreCount !== null ? (
                     <span style={{
-                      display: "inline-block", padding: "3px 10px", borderRadius: 6, fontSize: "0.74rem", fontWeight: 700,
+                      display: "inline-block", padding: "3px 9px", borderRadius: 6, fontSize: "0.74rem", fontWeight: 700,
                       background: goodStoreCount === insights!.stores.length ? C.greenBg : C.yellowBg,
-                      color: goodStoreCount === insights!.stores.length ? C.green : C.yellowText,
+                      color: goodStoreCount === insights!.stores.length ? C.greenText : C.yellowText,
+                      border: `1px solid ${goodStoreCount === insights!.stores.length ? C.greenBorder : C.yellowBorder}`,
                     }}>
                       {goodStoreCount === insights!.stores.length ? "✓ Tất cả hiệu quả" : `⚠ ${insights!.stores.length - goodStoreCount} cần cải thiện`}
                     </span>
                   ) : (
-                    <span style={{ fontSize: "0.74rem", color: C.muted }}>Cơ sở hoạt động hiệu quả</span>
+                    <span style={{ fontSize: "0.74rem", color: C.muted, fontWeight: 500 }}>Cơ sở hoạt động hiệu quả</span>
                   )}
                 </div>
               </Link>
 
-              {/* 🗑️ Hủy hàng */}
-              <Link to="/office/dm/disposals" className="kpi-link">
+              {/* 3. Hủy hàng */}
+              <Link to="/office/dm/inventory-waste" className="kpi-link">
                 <div className="kpi-card" style={{ ...card, borderLeft: `4px solid ${C.orange}`, padding: "20px 18px" }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
-                    <span style={{ fontSize: "1.4rem" }}>🗑️</span>
-                    <span style={{ fontSize: "0.75rem", fontWeight: 700, color: C.muted, textTransform: "uppercase", letterSpacing: "0.5px" }}>Hủy hàng</span>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
+                    <div style={{ width: 28, height: 28, borderRadius: 7, background: C.orangeBg, display: "flex", alignItems: "center", justifyContent: "center", color: C.orange }}>
+                      <Trash2 size={16} strokeWidth={2.2} />
+                    </div>
+                    <span style={{ fontSize: "0.75rem", fontWeight: 800, color: C.muted, textTransform: "uppercase", letterSpacing: "0.6px" }}>Hủy hàng</span>
                   </div>
-                  <div style={{ fontSize: "1.45rem", fontWeight: 800, color: C.dark, lineHeight: 1.1, marginBottom: 8 }}>
+                  <div style={{ fontSize: "1.48rem", fontWeight: 800, color: C.dark, lineHeight: 1.1, marginBottom: 8 }}>
                     {totalWasteAlerts > 0
-                      ? <>{totalWasteAlerts} <span style={{ fontSize: "0.85rem", fontWeight: 600 }}>cơ sở</span></>
+                      ? <>{totalWasteAlerts} <span style={{ fontSize: "0.85rem", fontWeight: 600, color: C.muted }}>cơ sở</span></>
                       : "Ổn định"}
                   </div>
                   {totalWasteAlerts > 0 ? (
-                    <span style={{ display: "inline-block", padding: "3px 10px", borderRadius: 6, fontSize: "0.74rem", fontWeight: 700, background: C.redBg, color: C.red }}>
+                    <span style={{ display: "inline-block", padding: "3px 9px", borderRadius: 6, fontSize: "0.74rem", fontWeight: 700, background: C.redBg, color: C.redText, border: `1px solid ${C.redBorder}` }}>
                       ▼ {totalWasteAlerts} cơ sở cảnh báo
                     </span>
                   ) : (
-                    <span style={{ display: "inline-block", padding: "3px 10px", borderRadius: 6, fontSize: "0.74rem", fontWeight: 700, background: C.greenBg, color: C.green }}>
+                    <span style={{ display: "inline-block", padding: "3px 9px", borderRadius: 6, fontSize: "0.74rem", fontWeight: 700, background: C.greenBg, color: C.greenText, border: `1px solid ${C.greenBorder}` }}>
                       ✓ Không có cảnh báo
                     </span>
                   )}
                 </div>
               </Link>
 
-              {/* 📦 Kiểm hàng */}
+              {/* 4. Kiểm hàng */}
               <Link to="/office/dm/inventory-shift" className="kpi-link">
                 <div className="kpi-card" style={{ ...card, borderLeft: `4px solid ${C.indigo}`, padding: "20px 18px" }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
-                    <span style={{ fontSize: "1.4rem" }}>📦</span>
-                    <span style={{ fontSize: "0.75rem", fontWeight: 700, color: C.muted, textTransform: "uppercase", letterSpacing: "0.5px" }}>Kiểm hàng</span>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
+                    <div style={{ width: 28, height: 28, borderRadius: 7, background: C.indigoBg, display: "flex", alignItems: "center", justifyContent: "center", color: C.indigo }}>
+                      <ClipboardCheck size={16} strokeWidth={2.2} />
+                    </div>
+                    <span style={{ fontSize: "0.75rem", fontWeight: 800, color: C.muted, textTransform: "uppercase", letterSpacing: "0.6px" }}>Kiểm hàng</span>
                   </div>
-                  <div style={{ fontSize: "1.45rem", fontWeight: 800, color: C.dark, lineHeight: 1.1, marginBottom: 8 }}>
+                  <div style={{ fontSize: "1.48rem", fontWeight: 800, color: C.dark, lineHeight: 1.1, marginBottom: 8 }}>
                     Duyệt phiếu
                   </div>
-                  <span style={{ display: "inline-block", padding: "3px 10px", borderRadius: 6, fontSize: "0.74rem", fontWeight: 700, background: "#eef2ff", color: "#4338ca" }}>
-                    → Xem danh sách
+                  <span style={{ display: "inline-flex", alignItems: "center", gap: 4, padding: "3px 9px", borderRadius: 6, fontSize: "0.74rem", fontWeight: 700, background: C.indigoBg, color: C.indigo }}>
+                    Xem danh sách <ArrowRight size={12} />
                   </span>
                 </div>
               </Link>
 
-              {/* 📥 Nhập kho */}
+              {/* 5. Nhập kho */}
               <Link to="/office/dm/inventory-receipts" className="kpi-link">
-                <div className="kpi-card" style={{ ...card, borderLeft: "4px solid #0f766e", padding: "20px 18px" }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
-                    <span style={{ fontSize: "1.4rem" }}>📥</span>
-                    <span style={{ fontSize: "0.75rem", fontWeight: 700, color: C.muted, textTransform: "uppercase", letterSpacing: "0.5px" }}>
-                      Nhập kho
-                    </span>
+                <div className="kpi-card" style={{ ...card, borderLeft: `4px solid ${C.teal}`, padding: "20px 18px" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
+                    <div style={{ width: 28, height: 28, borderRadius: 7, background: C.tealBg, display: "flex", alignItems: "center", justifyContent: "center", color: C.teal }}>
+                      <PackageCheck size={16} strokeWidth={2.2} />
+                    </div>
+                    <span style={{ fontSize: "0.75rem", fontWeight: 800, color: C.muted, textTransform: "uppercase", letterSpacing: "0.6px" }}>Nhập kho</span>
                   </div>
-                  <div style={{ fontSize: "1.45rem", fontWeight: 800, color: C.dark, lineHeight: 1.1, marginBottom: 8 }}>
-                    Báo cáo DM
+                  <div style={{ fontSize: "1.48rem", fontWeight: 800, color: C.dark, lineHeight: 1.1, marginBottom: 8 }}>
+                    Báo cáo kho
                   </div>
-                  <span
-                    style={{
-                      display: "inline-block",
-                      padding: "3px 10px",
-                      borderRadius: 6,
-                      fontSize: "0.74rem",
-                      fontWeight: 700,
-                      background: "#ecfeff",
-                      color: "#0f766e",
-                    }}
-                  >
-                    → Xem phiếu nhập
+                  <span style={{ display: "inline-flex", alignItems: "center", gap: 4, padding: "3px 9px", borderRadius: 6, fontSize: "0.74rem", fontWeight: 700, background: C.tealBg, color: C.teal }}>
+                    Xem phiếu nhập <ArrowRight size={12} />
                   </span>
                 </div>
               </Link>
 
-              {/* 💬 Khiếu nại */}
+              {/* 6. Khiếu nại */}
               <Link to="/office/complaints" className="kpi-link">
-                <div className="kpi-card" style={{ ...card, borderLeft: `4px solid ${highComplaints.length > 0 ? C.red : C.green}`, padding: "20px 18px" }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
-                    <span style={{ fontSize: "1.4rem" }}>💬</span>
-                    <span style={{ fontSize: "0.75rem", fontWeight: 700, color: C.muted, textTransform: "uppercase", letterSpacing: "0.5px" }}>Khiếu nại</span>
+                <div className="kpi-card" style={{ ...card, borderLeft: `4px solid ${highComplaints.length > 0 ? C.red : C.primary}`, padding: "20px 18px" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
+                    <div style={{ width: 28, height: 28, borderRadius: 7, background: highComplaints.length > 0 ? C.redBg : "rgba(54, 77, 57, 0.1)", display: "flex", alignItems: "center", justifyContent: "center", color: highComplaints.length > 0 ? C.red : C.primary }}>
+                      <MessageSquareWarning size={16} strokeWidth={2.2} />
+                    </div>
+                    <span style={{ fontSize: "0.75rem", fontWeight: 800, color: C.muted, textTransform: "uppercase", letterSpacing: "0.6px" }}>Khiếu nại</span>
                   </div>
-                  <div style={{ fontSize: "1.45rem", fontWeight: 800, color: C.dark, lineHeight: 1.1, marginBottom: 8 }}>
-                    {openComplaints.length} <span style={{ fontSize: "0.85rem", fontWeight: 600 }}>chờ xử lý</span>
+                  <div style={{ fontSize: "1.48rem", fontWeight: 800, color: C.dark, lineHeight: 1.1, marginBottom: 8 }}>
+                    {openComplaints.length} <span style={{ fontSize: "0.85rem", fontWeight: 600, color: C.muted }}>chờ xử lý</span>
                   </div>
                   {highComplaints.length > 0 ? (
-                    <span style={{ display: "inline-block", padding: "3px 10px", borderRadius: 6, fontSize: "0.74rem", fontWeight: 700, background: C.redBg, color: C.red }}>
+                    <span style={{ display: "inline-block", padding: "3px 9px", borderRadius: 6, fontSize: "0.74rem", fontWeight: 700, background: C.redBg, color: C.redText, border: `1px solid ${C.redBorder}` }}>
                       🚨 {highComplaints.length} khẩn cấp
                     </span>
                   ) : (
-                    <span style={{ display: "inline-block", padding: "3px 10px", borderRadius: 6, fontSize: "0.74rem", fontWeight: 700, background: C.greenBg, color: C.green }}>
+                    <span style={{ display: "inline-block", padding: "3px 9px", borderRadius: 6, fontSize: "0.74rem", fontWeight: 700, background: C.greenBg, color: C.greenText, border: `1px solid ${C.greenBorder}` }}>
                       ✓ Không có khẩn cấp
                     </span>
                   )}
@@ -405,11 +513,12 @@ export default function DashboardPage() {
 
               {/* ── Cột trái: Cảnh báo vận hành ── */}
               <div>
-                <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14 }}>
-                  <h2 style={{ margin: 0, fontWeight: 800, fontSize: "1.05rem", color: C.dark }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14 }}>
+                  <BarChart3 size={18} color={C.dark} />
+                  <h2 style={{ margin: 0, fontWeight: 800, fontSize: "1.08rem", color: C.dark }}>
                     {filterStore
-                      ? `📋 Tình hình cơ sở — ${storeList.find((s) => s.store_id === filterStore)?.store_name ?? ""}`
-                      : "📊 Tình hình vận hành chuỗi"}
+                      ? `Tình hình cơ sở — ${storeList.find((s) => s.store_id === filterStore)?.store_name ?? ""}`
+                      : "Tình hình vận hành chuỗi"}
                   </h2>
                 </div>
 
@@ -421,47 +530,70 @@ export default function DashboardPage() {
 
                   if (alertStores.length === 0) return (
                     <div style={{
-                      background: C.greenBg, borderRadius: 10, borderLeft: `4px solid ${C.green}`,
-                      padding: "14px 18px", display: "flex", alignItems: "center", gap: 12, boxShadow: shadow,
+                      background: C.white,
+                      borderRadius: radius,
+                      border: `1px solid ${C.greenBorder}`,
+                      borderLeft: `4px solid ${C.green}`,
+                      padding: "18px 20px",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 12,
+                      boxShadow: shadow,
                     }}>
-                      <span style={{ fontSize: "1.1rem" }}>🎉</span>
-                      <span style={{ fontSize: "0.84rem", color: "#276749", fontWeight: 600 }}>
-                        Không có cảnh báo — chuỗi hoạt động ổn định
+                      <CheckCircle2 size={20} color={C.green} />
+                      <span style={{ fontSize: "0.88rem", color: C.greenText, fontWeight: 700 }}>
+                        Không có cảnh báo phát sinh — toàn chuỗi đang hoạt động ổn định
                       </span>
                     </div>
                   );
 
                   return (
-                    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
                       {alertStores.map((store) => (
                         <div key={store.store_id} style={{
-                          background: "#fff", borderRadius: 10,
+                          background: C.white,
+                          borderRadius: radius,
                           border: `1px solid ${C.border}`,
-                          borderLeft: `4px solid ${C.olive}`,
-                          boxShadow: shadow, overflow: "hidden",
+                          borderLeft: `4px solid ${C.primary}`,
+                          boxShadow: shadow,
+                          overflow: "hidden",
                         }}>
                           {/* Card header */}
                           <div style={{
-                            display: "flex", alignItems: "center", justifyContent: "space-between",
-                            padding: "10px 14px", background: C.bg,
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "space-between",
+                            padding: "12px 16px",
+                            background: "#FAF6F3",
                             borderBottom: `1px solid ${C.border}`,
                           }}>
-                            <span style={{ fontSize: "0.88rem", fontWeight: 800, color: C.dark }}>{store.store_name}</span>
-                            <span style={{ fontSize: "0.7rem", color: C.muted, fontWeight: 600 }}>
-                              {store.insights.length} vấn đề
+                            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                              <StoreIcon size={16} color={C.primary} />
+                              <span style={{ fontSize: "0.90rem", fontWeight: 800, color: C.dark }}>{store.store_name}</span>
+                            </div>
+                            <span style={{
+                              fontSize: "0.72rem",
+                              color: C.primary,
+                              fontWeight: 700,
+                              background: "rgba(54, 77, 57, 0.1)",
+                              padding: "2px 8px",
+                              borderRadius: 6,
+                            }}>
+                              {store.insights.length} vấn đề cần theo dõi
                             </span>
                           </div>
 
                           {/* Card body — issue list */}
-                          <ul style={{ margin: 0, padding: "10px 14px 10px 28px", display: "flex", flexDirection: "column", gap: 8 }}>
+                          <ul style={{ margin: 0, padding: "12px 18px 14px 34px", display: "flex", flexDirection: "column", gap: 10 }}>
                             {store.insights.map((ins, idx) => {
                               const anomaly = isDataAnomaly(ins.text);
                               const cta = insightCTA(ins.type);
                               return (
-                                <li key={idx} style={{ fontSize: "0.82rem", lineHeight: 1.5 }}>
+                                <li key={idx} style={{ fontSize: "0.84rem", lineHeight: 1.5 }}>
                                   {anomaly ? (
-                                    <span style={{ color: C.orange, fontWeight: 600 }}>
-                                      ⚠️ Dữ liệu bất thường hoặc thiếu hụt. Đề nghị đối chiếu lại dữ liệu từ POS/Kế toán.
+                                    <span style={{ color: C.orange, fontWeight: 700, display: "inline-flex", alignItems: "center", gap: 4 }}>
+                                      <AlertTriangle size={14} color={C.orange} />
+                                      Dữ liệu bất thường hoặc thiếu hụt. Đề nghị đối chiếu lại dữ liệu từ POS/Kế toán.
                                     </span>
                                   ) : (
                                     <span style={{ color: C.dark, fontWeight: 500 }}>{ins.text}</span>
@@ -470,9 +602,9 @@ export default function DashboardPage() {
                                   <Link
                                     to={cta.to}
                                     className="insight-detail-link"
-                                    style={{ color: anomaly ? C.orange : C.olive }}
+                                    style={{ color: anomaly ? C.orange : C.primary }}
                                   >
-                                    {cta.label} ↗
+                                    {cta.label} <ArrowUpRight size={12} />
                                   </Link>
                                 </li>
                               );
@@ -485,49 +617,69 @@ export default function DashboardPage() {
                 })()}
               </div>
 
-              {/* ── Cột phải: Giám sát Khiếu nại & Vấn đề (Read-only) ── */}
+              {/* ── Cột phải: Giám sát Khiếu nại & Vấn đề ── */}
               <div>
                 <div style={{ ...card, overflow: "hidden" }}>
                   {/* Section header with CTA */}
                   <div style={{
-                    padding: "14px 18px", borderBottom: `1px solid ${C.border}`,
-                    display: "flex", justifyContent: "space-between", alignItems: "center",
+                    padding: "16px 20px",
+                    borderBottom: `1px solid ${C.border}`,
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    flexWrap: "wrap",
+                    gap: 10,
                   }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                      <span style={{ fontWeight: 800, fontSize: "0.95rem", color: C.dark }}>🔍 Giám sát khiếu nại & Vấn đề</span>
+                      <ShieldAlert size={18} color={C.dark} />
+                      <span style={{ fontWeight: 800, fontSize: "0.98rem", color: C.dark }}>Giám sát khiếu nại</span>
                       {openComplaints.length > 0 && (
-                        <span style={{ padding: "1px 8px", borderRadius: 99, fontSize: "0.7rem", fontWeight: 700, background: C.red, color: "#fff" }}>
+                        <span style={{ padding: "1px 7px", borderRadius: 99, fontSize: "0.72rem", fontWeight: 800, background: C.red, color: "#fff" }}>
                           {openComplaints.length}
                         </span>
                       )}
                     </div>
                     <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                      <Link to="/office/complaints" className="cta-link" style={{ color: C.olive }}>
-                        Xử lý khiếu nại ↗
+                      <Link to="/office/complaints" className="cta-link" style={{ color: C.primary }}>
+                        Xử lý khiếu nại <ArrowUpRight size={13} />
                       </Link>
 
                       <Link
                         to="/office/dm/inventory-shift"
                         style={{
-                          display: "inline-flex", alignItems: "center", gap: 6,
-                          padding: "5px 12px", borderRadius: 6, fontSize: "0.78rem", fontWeight: 700,
-                          background: "#eef2ff", color: "#4338ca", textDecoration: "none",
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: 5,
+                          padding: "5px 11px",
+                          borderRadius: 6,
+                          fontSize: "0.76rem",
+                          fontWeight: 700,
+                          background: C.indigoBg,
+                          color: C.indigo,
+                          textDecoration: "none",
                           border: "1px solid #c7d2fe",
                         }}
                       >
-                        📦 Duyệt kiểm hàng →
+                        <ClipboardCheck size={13} /> Duyệt kiểm hàng
                       </Link>
 
                       <Link
                         to="/office/dm/inventory-receipts"
                         style={{
-                          display: "inline-flex", alignItems: "center", gap: 6,
-                          padding: "5px 12px", borderRadius: 6, fontSize: "0.78rem", fontWeight: 700,
-                          background: "#ecfeff", color: "#0f766e", textDecoration: "none",
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: 5,
+                          padding: "5px 11px",
+                          borderRadius: 6,
+                          fontSize: "0.76rem",
+                          fontWeight: 700,
+                          background: C.tealBg,
+                          color: C.teal,
+                          textDecoration: "none",
                           border: "1px solid #99f6e4",
                         }}
                       >
-                        📥 Báo cáo nhập kho →
+                        <PackageCheck size={13} /> Nhập kho
                       </Link>
                     </div>
                   </div>
@@ -535,20 +687,26 @@ export default function DashboardPage() {
                   {/* Overdue warning banner */}
                   {overdueComplaints.length > 0 && (
                     <div style={{
-                      padding: "8px 18px", background: C.redBg,
-                      borderBottom: `1px solid #fed7d7`,
-                      fontSize: "0.76rem", fontWeight: 700, color: C.red,
-                      display: "flex", alignItems: "center", gap: 6,
+                      padding: "10px 18px",
+                      background: C.redBg,
+                      borderBottom: `1px solid ${C.redBorder}`,
+                      fontSize: "0.78rem",
+                      fontWeight: 700,
+                      color: C.redText,
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 8,
                     }}>
-                      ⏰ {overdueComplaints.length} khiếu nại quá hạn (&gt;3 ngày chưa xử lý)
+                      <ClockAlert size={15} color={C.red} />
+                      <span>{overdueComplaints.length} khiếu nại quá hạn (&gt;3 ngày chưa xử lý)</span>
                     </div>
                   )}
 
                   {/* Card body — read-only list */}
                   {openComplaints.length === 0 ? (
-                    <div style={{ textAlign: "center", padding: "40px 16px" }}>
-                      <div style={{ fontSize: "2.5rem", marginBottom: 8 }}>🎉</div>
-                      <p style={{ color: C.muted, fontSize: "0.88rem", fontWeight: 500, margin: 0 }}>
+                    <div style={{ textAlign: "center", padding: "48px 16px" }}>
+                      <CheckCircle2 size={36} color={C.primary} strokeWidth={2} style={{ margin: "0 auto 10px" }} />
+                      <p style={{ color: C.muted, fontSize: "0.90rem", fontWeight: 600, margin: 0 }}>
                         Không có khiếu nại nào đang mở
                       </p>
                     </div>
@@ -561,46 +719,71 @@ export default function DashboardPage() {
 
                         return (
                           <li key={c.id} style={{
-                            padding: "12px 18px",
-                            borderBottom: "1px solid #f0f0f0",
-                            display: "flex", alignItems: "center", gap: 12,
+                            padding: "13px 18px",
+                            borderBottom: `1px solid #F3EDE7`,
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 12,
                             background: rowBg,
                           }}>
                             {/* Priority dot */}
                             <div style={{
-                              width: 9, height: 9, borderRadius: "50%", flexShrink: 0,
+                              width: 8,
+                              height: 8,
+                              borderRadius: "50%",
+                              flexShrink: 0,
                               background: isHigh ? C.red : c.priority === "medium" ? "#d69e2e" : C.green,
-                              boxShadow: isHigh ? "0 0 0 3px #fed7d740" : "none",
+                              boxShadow: isHigh ? "0 0 0 3px #fed7d7" : "none",
                             }} />
 
                             {/* Content */}
                             <div style={{ flex: 1, minWidth: 0 }}>
                               <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 3, flexWrap: "wrap" }}>
                                 <span style={{
-                                  fontSize: "0.82rem", fontWeight: 700, color: C.dark,
-                                  overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                                  fontSize: "0.84rem",
+                                  fontWeight: 700,
+                                  color: C.dark,
+                                  overflow: "hidden",
+                                  textOverflow: "ellipsis",
+                                  whiteSpace: "nowrap",
                                 }}>
                                   {c.subject}
                                 </span>
                                 <span style={{
-                                  flexShrink: 0, padding: "1px 7px", borderRadius: 4, fontSize: "0.62rem", fontWeight: 800,
+                                  flexShrink: 0,
+                                  padding: "1px 7px",
+                                  borderRadius: 4,
+                                  fontSize: "0.64rem",
+                                  fontWeight: 800,
                                   background: isHigh ? C.redBg : c.priority === "medium" ? C.yellowBg : C.greenBg,
-                                  color: isHigh ? C.red : c.priority === "medium" ? C.yellowText : C.green,
+                                  color: isHigh ? C.redText : c.priority === "medium" ? C.yellowText : C.greenText,
                                 }}>
                                   {isHigh ? "Cao" : c.priority === "medium" ? "TB" : "Thấp"}
                                 </span>
                                 {overdue && (
                                   <span style={{
-                                    flexShrink: 0, padding: "1px 7px", borderRadius: 4,
-                                    fontSize: "0.62rem", fontWeight: 800,
-                                    background: C.red, color: "#fff",
+                                    flexShrink: 0,
+                                    padding: "1px 7px",
+                                    borderRadius: 4,
+                                    fontSize: "0.64rem",
+                                    fontWeight: 800,
+                                    background: C.red,
+                                    color: "#fff",
                                   }}>
                                     QUÁ HẠN
                                   </span>
                                 )}
                               </div>
-                              <div style={{ fontSize: "0.73rem", color: C.muted }}>
-                                🏪 {c.store_name} · 👤 {c.customer_name} · {formatDate(c.created_at)}
+                              <div style={{ fontSize: "0.75rem", color: C.muted, display: "flex", alignItems: "center", gap: 8 }}>
+                                <span style={{ display: "inline-flex", alignItems: "center", gap: 3 }}>
+                                  <StoreIcon size={12} /> {c.store_name}
+                                </span>
+                                <span>·</span>
+                                <span style={{ display: "inline-flex", alignItems: "center", gap: 3 }}>
+                                  <UserIcon size={12} /> {c.customer_name}
+                                </span>
+                                <span>·</span>
+                                <span>{formatDate(c.created_at)}</span>
                               </div>
                             </div>
                           </li>
@@ -608,9 +791,9 @@ export default function DashboardPage() {
                       })}
 
                       {openComplaints.length > 8 && (
-                        <li style={{ textAlign: "center", padding: "10px 18px", background: C.bg }}>
-                          <Link to="/office/complaints" className="cta-link" style={{ color: C.olive }}>
-                            + {openComplaints.length - 8} khiếu nại khác →
+                        <li style={{ textAlign: "center", padding: "12px 18px", background: "#FAF6F3" }}>
+                          <Link to="/office/complaints" className="cta-link" style={{ color: C.primary }}>
+                            + {openComplaints.length - 8} khiếu nại khác <ArrowRight size={13} />
                           </Link>
                         </li>
                       )}
@@ -625,11 +808,14 @@ export default function DashboardPage() {
                 ══════════════════════════════════════════════════════════ */}
             <div style={{ marginBottom: 28 }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-                <h2 style={{ margin: 0, fontWeight: 800, fontSize: "1.05rem", color: C.dark }}>
-                  🏆 Top Quán & Phân tích
-                </h2>
-                <Link to="/office/reports/revenue" className="cta-link" style={{ color: C.olive }}>
-                  Xem báo cáo chi tiết ↗
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <Trophy size={18} color={C.orange} />
+                  <h2 style={{ margin: 0, fontWeight: 800, fontSize: "1.08rem", color: C.dark }}>
+                    Top Quán & Đánh Giá Vận Hành
+                  </h2>
+                </div>
+                <Link to="/office/reports/revenue" className="cta-link" style={{ color: C.primary }}>
+                  Xem báo cáo chi tiết <ArrowUpRight size={13} />
                 </Link>
               </div>
 
@@ -638,42 +824,58 @@ export default function DashboardPage() {
                 {/* Cột 1 — Top Cơ sở hiệu quả */}
                 <div style={{ ...card, padding: "20px 22px" }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16 }}>
-                    <span style={{ fontSize: "1.2rem" }}>🌟</span>
-                    <h3 style={{ margin: 0, fontSize: "0.9rem", fontWeight: 800, color: C.dark }}>Top Cơ sở hiệu quả nhất</h3>
+                    <Sparkles size={16} color={C.green} />
+                    <h3 style={{ margin: 0, fontSize: "0.92rem", fontWeight: 800, color: C.dark }}>Top Cơ sở hiệu quả nhất</h3>
                   </div>
 
                   {topGood.length > 0 ? topGood.map((store, idx) => (
                     <div key={store.store_id} style={{
-                      display: "flex", alignItems: "center", gap: 14,
-                      padding: "12px 14px", borderRadius: 10,
-                      background: idx === 0 ? C.greenBg : C.bg,
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 14,
+                      padding: "12px 14px",
+                      borderRadius: 10,
+                      background: idx === 0 ? C.greenBg : "#FAF6F3",
                       marginBottom: idx < topGood.length - 1 ? 8 : 0,
-                      border: idx === 0 ? `1px solid ${C.green}30` : `1px solid ${C.border}`,
+                      border: idx === 0 ? `1px solid ${C.greenBorder}` : `1px solid ${C.border}`,
                     }}>
                       <div style={{
-                        width: 32, height: 32, borderRadius: 8,
-                        background: C.green, color: "#fff",
-                        display: "flex", alignItems: "center", justifyContent: "center",
-                        fontWeight: 800, fontSize: "0.85rem", flexShrink: 0,
+                        width: 32,
+                        height: 32,
+                        borderRadius: 8,
+                        background: C.primary,
+                        color: "#fff",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        fontWeight: 800,
+                        fontSize: "0.85rem",
+                        flexShrink: 0,
                       }}>
                         #{idx + 1}
                       </div>
                       <div style={{ flex: 1 }}>
-                        <div style={{ fontSize: "0.88rem", fontWeight: 700, color: C.dark, marginBottom: 3 }}>
+                        <div style={{ fontSize: "0.90rem", fontWeight: 700, color: C.dark, marginBottom: 3 }}>
                           {store.store_name}
                         </div>
                         <span style={{
-                          display: "inline-block", padding: "2px 10px", borderRadius: 6,
-                          fontSize: "0.68rem", fontWeight: 700,
-                          background: C.greenBg, color: C.green,
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: 4,
+                          padding: "2px 8px",
+                          borderRadius: 5,
+                          fontSize: "0.70rem",
+                          fontWeight: 700,
+                          background: C.greenBg,
+                          color: C.greenText,
                         }}>
-                          ✓ Vận hành tốt — Không có vấn đề
+                          <CheckCircle2 size={12} /> Vận hành chuẩn mực — Không có cảnh báo
                         </span>
                       </div>
                     </div>
                   )) : (
-                    <div style={{ textAlign: "center", padding: "24px 0", color: C.muted, fontSize: "0.84rem" }}>
-                      Chưa có dữ liệu xếp hạng cho kỳ này
+                    <div style={{ textAlign: "center", padding: "28px 0", color: C.muted, fontSize: "0.85rem", fontWeight: 500 }}>
+                      Chưa có đủ dữ liệu xếp hạng trong kỳ này
                     </div>
                   )}
                 </div>
@@ -681,8 +883,8 @@ export default function DashboardPage() {
                 {/* Cột 2 — Top Cơ sở cần chú ý */}
                 <div style={{ ...card, padding: "20px 22px" }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16 }}>
-                    <span style={{ fontSize: "1.2rem" }}>⚠️</span>
-                    <h3 style={{ margin: 0, fontSize: "0.9rem", fontWeight: 800, color: C.dark }}>Top Cơ sở cần chú ý</h3>
+                    <AlertTriangle size={16} color={C.red} />
+                    <h3 style={{ margin: 0, fontSize: "0.92rem", fontWeight: 800, color: C.dark }}>Top Cơ sở cần lưu ý</h3>
                   </div>
 
                   {topBad.length > 0 ? topBad.map((store, idx) => {
@@ -691,44 +893,60 @@ export default function DashboardPage() {
 
                     return (
                       <div key={store.store_id} style={{
-                        display: "flex", alignItems: "center", gap: 14,
-                        padding: "12px 14px", borderRadius: 10,
-                        background: idx === 0 ? C.redBg : C.bg,
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 14,
+                        padding: "12px 14px",
+                        borderRadius: 10,
+                        background: idx === 0 ? C.redBg : "#FAF6F3",
                         marginBottom: idx < topBad.length - 1 ? 8 : 0,
-                        border: idx === 0 ? `1px solid ${C.red}30` : `1px solid ${C.border}`,
+                        border: idx === 0 ? `1px solid ${C.redBorder}` : `1px solid ${C.border}`,
                       }}>
                         <div style={{
-                          width: 32, height: 32, borderRadius: 8,
-                          background: C.red, color: "#fff",
-                          display: "flex", alignItems: "center", justifyContent: "center",
-                          fontWeight: 800, fontSize: "0.85rem", flexShrink: 0,
+                          width: 32,
+                          height: 32,
+                          borderRadius: 8,
+                          background: C.red,
+                          color: "#fff",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          fontWeight: 800,
+                          fontSize: "0.85rem",
+                          flexShrink: 0,
                         }}>
                           #{idx + 1}
                         </div>
                         <div style={{ flex: 1 }}>
-                          <div style={{ fontSize: "0.88rem", fontWeight: 700, color: C.dark, marginBottom: 3 }}>
+                          <div style={{ fontSize: "0.90rem", fontWeight: 700, color: C.dark, marginBottom: 3 }}>
                             {store.store_name}
                           </div>
                           {mainIssue && (
-                            <div style={{ fontSize: "0.76rem", color: C.muted, marginBottom: 4, lineHeight: 1.35 }}>
+                            <div style={{ fontSize: "0.78rem", color: C.muted, marginBottom: 4, lineHeight: 1.35 }}>
                               {mainIssue.text}
                             </div>
                           )}
                           <span style={{
-                            display: "inline-block", padding: "2px 10px", borderRadius: 6,
-                            fontSize: "0.68rem", fontWeight: 700,
-                            background: C.redBg, color: C.red,
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: 4,
+                            padding: "2px 8px",
+                            borderRadius: 5,
+                            fontSize: "0.70rem",
+                            fontWeight: 700,
+                            background: C.redBg,
+                            color: C.redText,
                           }}>
-                            {warnCount > 0 ? `🔴 ${warnCount} cảnh báo` : `🟠 ${store.insights.length} vấn đề`}
+                            <AlertTriangle size={12} /> {warnCount > 0 ? `${warnCount} cảnh báo` : `${store.insights.length} vấn đề`}
                           </span>
                         </div>
                       </div>
                     );
                   }) : (
-                    <div style={{ textAlign: "center", padding: "24px 0" }}>
-                      <span style={{ fontSize: "1.5rem" }}>🎉</span>
-                      <p style={{ color: C.green, fontSize: "0.84rem", fontWeight: 600, margin: "8px 0 0" }}>
-                        Tất cả cơ sở đều hoạt động tốt!
+                    <div style={{ textAlign: "center", padding: "28px 0" }}>
+                      <CheckCircle2 size={32} color={C.green} strokeWidth={2} style={{ margin: "0 auto 8px" }} />
+                      <p style={{ color: C.greenText, fontSize: "0.86rem", fontWeight: 700, margin: 0 }}>
+                        Tất cả các chi nhánh đều đang vận hành tốt!
                       </p>
                     </div>
                   )}

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { useAuthStore, isOwnerOrAdmin } from "../../../app/store/auth.store";
 import {
   posOrderIssuesApi,
   type PosOrderIssue,
@@ -7,6 +8,7 @@ import {
 
 export default function PosPickupSelectPage() {
   const nav = useNavigate();
+  const user = useAuthStore((s) => s.user);
 
   const PICKUP_CARD_COUNT = Math.max(
     1,
@@ -168,6 +170,26 @@ export default function PosPickupSelectPage() {
             >
               Về dashboard
             </button>
+
+            {isOwnerOrAdmin(user) && (
+              <button
+                style={{
+                  background: "#2B402D",
+                  color: "#FAF6F3",
+                  border: "none",
+                  borderRadius: 14,
+                  padding: "12px 18px",
+                  fontWeight: 700,
+                  fontSize: 15,
+                  fontFamily: uiFont,
+                  cursor: "pointer",
+                  boxShadow: "0 4px 14px rgba(43, 64, 45, 0.18)",
+                }}
+                onClick={() => nav("/office/dashboard")}
+              >
+                🏢 Về Quản trị
+              </button>
+            )}
           </div>
         </div>
 

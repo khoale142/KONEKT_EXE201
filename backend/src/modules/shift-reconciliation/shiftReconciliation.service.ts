@@ -274,7 +274,10 @@ export async function openShiftReconciliation(params: {
 export async function getCurrentShiftReconciliation(params: {
   storeId: number;
 }) {
-  const current = await repo.findOpenReconciliationByStore(params.storeId);
+  let current = await repo.findOpenReconciliationByStore(params.storeId);
+  if (!current) {
+    current = await repo.autoOpenDefaultShiftSession(params.storeId);
+  }
   if (!current) return null;
 
   return buildDetail({

@@ -1,6 +1,7 @@
-import { pool } from "../../config/db";
+import { db } from "../../db";
+import { gatewayPayments, orders, payments, customers } from "../../db/schema";
+import { eq, and, desc, sql } from "drizzle-orm";
 import type { GatewayPaymentStatus } from "./payments.types";
-import { applyCustomerPointsDelta } from "../../utils/membershipLevel";
 
 export interface InsertPaymentParams {
   order_id: number;
@@ -18,86 +19,103 @@ export interface InsertPaymentParams {
 }
 
 export async function insertPayment(params: InsertPaymentParams) {
-  const r = await pool.query(
-    `
-    INSERT INTO coffee_chain_db.gateway_payments (
-      order_id, provider, provider_order_id, request_id, amount, status,
-      pay_url, deeplink, qr_code_url, raw_request, raw_response, expired_at
-    )
-    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10::jsonb, $11::jsonb, $12)
-    RETURNING id, order_id, provider, request_id, amount, status, pay_url, created_at
-    `,
-    [
-      params.order_id,
-      params.provider,
-      params.provider_order_id,
-      params.request_id,
-      params.amount,
-      params.status,
-      params.pay_url,
-      params.deeplink,
-      params.qr_code_url,
-      params.raw_request ? JSON.stringify(params.raw_request) : null,
-      params.raw_response ? JSON.stringify(params.raw_response) : null,
-      params.expired_at,
-    ]
-  );
-  return r.rows[0];
+  const [created] = await db
+    .insert(gatewayPayments)
+    .values({
+      orderId: params.order_id,
+      provider: params.provider,
+      providerOrderId: params.provider_order_id,
+      requestId: params.request_id,
+      amount: String(params.amount),
+      status: params.status,
+      payUrl: params.pay_url,
+      deeplink: params.deeplink,
+      qrCodeUrl: params.qr_code_url,
+      rawRequest: params.raw_request,
+      rawResponse: params.raw_response,
+      expiredAt: params.expired_at,
+    })
+    .returning({
+      id: gatewayPayments.id,
+      order_id: gatewayPayments.orderId,
+      provider: gatewayPayments.provider,
+      request_id: gatewayPayments.requestId,
+      amount: gatewayPayments.amount,
+      status: gatewayPayments.status,
+      pay_url: gatewayPayments.payUrl,
+      created_at: gatewayPayments.createdAt,
+    });
+  return created;
 }
 
 export async function findPaymentByRequestId(requestId: string) {
-  const r = await pool.query(
-    `
-    SELECT id, order_id, provider, provider_order_id, request_id, amount, status,
-           pay_url, raw_response, paid_at, expired_at, created_at, updated_at
-    FROM coffee_chain_db.gateway_payments
-    WHERE request_id = $1
-    LIMIT 1
-    `,
-    [requestId]
-  );
-  return r.rows[0] ?? null;
+  const r = await db.query.gatewayPayments.findFirst({
+    where: eq(gatewayPayments.requestId, requestId),
+  });
+  if (!r) return null;
+  return {
+    id: r.id,
+    order_id: r.orderId,
+    provider: r.provider,
+    provider_order_id: r.providerOrderId,
+    request_id: r.requestId,
+    amount: Number(r.amount),
+    status: r.status as GatewayPaymentStatus,
+    pay_url: r.payUrl,
+    raw_response: r.rawResponse,
+    paid_at: r.paidAt,
+    expired_at: r.expiredAt,
+    created_at: r.createdAt,
+    updated_at: r.updatedAt,
+  };
 }
 
 export async function findLatestPaymentByOrderId(orderId: number) {
-  const r = await pool.query(
-    `
-    SELECT id, order_id, provider, provider_order_id, request_id, amount, status,
-           pay_url, paid_at, expired_at, created_at, updated_at
-    FROM coffee_chain_db.gateway_payments
-    WHERE order_id = $1
-    ORDER BY created_at DESC
-    LIMIT 1
-    `,
-    [orderId]
-  );
-  return r.rows[0] ?? null;
+  const r = await db.query.gatewayPayments.findFirst({
+    where: eq(gatewayPayments.orderId, orderId),
+    orderBy: [desc(gatewayPayments.createdAt)],
+  });
+  if (!r) return null;
+  return {
+    id: r.id,
+    order_id: r.orderId,
+    provider: r.provider,
+    provider_order_id: r.providerOrderId,
+    request_id: r.requestId,
+    amount: Number(r.amount),
+    status: r.status as GatewayPaymentStatus,
+    pay_url: r.payUrl,
+    paid_at: r.paidAt,
+    expired_at: r.expiredAt,
+    created_at: r.createdAt,
+    updated_at: r.updatedAt,
+  };
 }
 
 /** Latest PENDING payment by order_id (for Payment Kit webhook mapping by orderCode). */
 export async function findLatestPendingPaymentByOrderId(orderId: number) {
-  const r = await pool.query(
-    `
-    SELECT id, order_id, provider, provider_order_id, request_id, amount, status
-    FROM coffee_chain_db.gateway_payments
-    WHERE order_id = $1 AND status = 'PENDING'
-    ORDER BY created_at DESC
-    LIMIT 1
-    `,
-    [orderId]
-  );
-  return r.rows[0] ?? null;
+  const r = await db.query.gatewayPayments.findFirst({
+    where: and(eq(gatewayPayments.orderId, orderId), eq(gatewayPayments.status, "PENDING")),
+    orderBy: [desc(gatewayPayments.createdAt)],
+  });
+  if (!r) return null;
+  return {
+    id: r.id,
+    order_id: r.orderId,
+    provider: r.provider,
+    provider_order_id: r.providerOrderId,
+    request_id: r.requestId,
+    amount: Number(r.amount),
+    status: r.status as GatewayPaymentStatus,
+  };
 }
 
 export async function countPendingGatewayPayments(): Promise<number> {
-  const r = await pool.query(
-    `
-    SELECT COUNT(*)::int AS total
-    FROM coffee_chain_db.gateway_payments
-    WHERE status = 'PENDING'
-    `
-  );
-  return Number(r.rows[0]?.total || 0);
+  const res = await db
+    .select({ count: sql<number>`count(*)::int` })
+    .from(gatewayPayments)
+    .where(eq(gatewayPayments.status, "PENDING"));
+  return Number(res[0]?.count || 0);
 }
 
 /** Idempotent: chỉ update khi status khác PAID. Trả về số dòng bị update (0 hoặc 1). */
@@ -106,30 +124,34 @@ export async function updatePaymentStatusToPaid(params: {
   providerOrderId: string;
   rawResponse: Record<string, unknown>;
 }) {
-  const r = await pool.query(
-    `
-    UPDATE coffee_chain_db.gateway_payments
-    SET status = 'PAID', provider_order_id = $2, raw_response = COALESCE(raw_response, '{}'::jsonb) || $3::jsonb, paid_at = NOW(), updated_at = NOW()
-    WHERE request_id = $1 AND status <> 'PAID'
-    RETURNING id, order_id
-    `,
-    [params.requestId, params.providerOrderId, JSON.stringify(params.rawResponse)]
-  );
-  return r.rowCount ?? 0;
+  const now = new Date();
+  const res = await db
+    .update(gatewayPayments)
+    .set({
+      status: "PAID",
+      providerOrderId: params.providerOrderId,
+      rawResponse: params.rawResponse,
+      paidAt: now,
+      updatedAt: now,
+    })
+    .where(and(eq(gatewayPayments.requestId, params.requestId), sql`${gatewayPayments.status} <> 'PAID'`))
+    .returning({ id: gatewayPayments.id, order_id: gatewayPayments.orderId });
+  return res.length;
 }
 
 export async function updatePaymentStatusToFailed(params: {
   requestId: string;
   rawResponse: Record<string, unknown>;
 }) {
-  await pool.query(
-    `
-    UPDATE coffee_chain_db.gateway_payments
-    SET status = 'FAILED', raw_response = raw_response || $2::jsonb, updated_at = NOW()
-    WHERE request_id = $1 AND status = 'PENDING'
-    `,
-    [params.requestId, JSON.stringify(params.rawResponse)]
-  );
+  const now = new Date();
+  await db
+    .update(gatewayPayments)
+    .set({
+      status: "FAILED",
+      rawResponse: params.rawResponse,
+      updatedAt: now,
+    })
+    .where(and(eq(gatewayPayments.requestId, params.requestId), eq(gatewayPayments.status, "PENDING")));
 }
 
 export async function settleGatewayPayment(params: {
@@ -138,44 +160,23 @@ export async function settleGatewayPayment(params: {
   rawResponse: Record<string, unknown>;
   expectedAmount?: number | null;
 }) {
-  const client = await pool.connect();
-
-  try {
-    await client.query("BEGIN");
-
-    const paymentResult = await client.query(
-      `
-      SELECT id, order_id, amount, status
-      FROM coffee_chain_db.gateway_payments
-      WHERE request_id = $1
-      FOR UPDATE
-      `,
-      [params.requestId]
-    );
-    const payment = paymentResult.rows[0] ?? null;
+  return await db.transaction(async (tx) => {
+    const payment = await tx.query.gatewayPayments.findFirst({
+      where: eq(gatewayPayments.requestId, params.requestId),
+    });
     if (!payment) {
-      await client.query("ROLLBACK");
       return { ok: false as const, reason: "payment_not_found" as const };
     }
 
-    const orderResult = await client.query(
-      `
-      SELECT id, status, customer_id, order_code
-      FROM coffee_chain_db.orders
-      WHERE id = $1
-      FOR UPDATE
-      `,
-      [payment.order_id]
-    );
-    const order = orderResult.rows[0] ?? null;
+    const order = await tx.query.orders.findFirst({
+      where: eq(orders.id, payment.orderId),
+    });
     if (!order) {
-      await client.query("ROLLBACK");
       return { ok: false as const, reason: "order_not_found" as const };
     }
 
     const orderStatus = String(order.status || "").toLowerCase();
-    if (orderStatus === "voided" || orderStatus === "refunded") {
-      await client.query("ROLLBACK");
+    if (orderStatus === "voided" || orderStatus === "cancelled" || orderStatus === "refunded") {
       return { ok: false as const, reason: "order_not_payable" as const };
     }
 
@@ -185,7 +186,6 @@ export async function settleGatewayPayment(params: {
       orderStatus === "paid" ||
       orderStatus === "completed"
     ) {
-      await client.query("ROLLBACK");
       return { ok: false as const, reason: "already_processed" as const };
     }
 
@@ -196,109 +196,90 @@ export async function settleGatewayPayment(params: {
       Number.isFinite(expectedAmount) &&
       Number(payment.amount) !== expectedAmount
     ) {
-      await client.query("ROLLBACK");
       return { ok: false as const, reason: "amount_mismatch" as const };
     }
 
-    await client.query(
-      `
-      UPDATE coffee_chain_db.gateway_payments
-      SET status = 'PAID',
-          provider_order_id = $2,
-          raw_response = COALESCE(raw_response, '{}'::jsonb) || $3::jsonb,
-          paid_at = NOW(),
-          updated_at = NOW()
-      WHERE id = $1
-      `,
-      [payment.id, params.providerOrderId, JSON.stringify(params.rawResponse)]
-    );
+    const now = new Date();
 
-    await client.query(
-      `
-      UPDATE coffee_chain_db.orders
-      SET status = 'paid'
-      WHERE id = $1
-      `,
-      [payment.order_id]
-    );
+    await tx
+      .update(gatewayPayments)
+      .set({
+        status: "PAID",
+        providerOrderId: params.providerOrderId,
+        rawResponse: params.rawResponse,
+        paidAt: now,
+        updatedAt: now,
+      })
+      .where(eq(gatewayPayments.id, payment.id));
 
-    await client.query(
-      `
-      INSERT INTO coffee_chain_db.order_payments (order_id, method, amount, reference_code, paid_at)
-      VALUES ($1, 'gateway', $2, $3, NOW())
-      `,
-      [payment.order_id, payment.amount, params.providerOrderId]
-    );
+    await tx
+      .update(orders)
+      .set({
+        status: "completed",
+        isHold: false,
+        updatedAt: now,
+      })
+      .where(eq(orders.id, payment.orderId));
 
-    const customerId =
-      order.customer_id != null ? Number(order.customer_id) : null;
+    await tx.insert(payments).values({
+      orderId: payment.orderId,
+      method: "vietqr",
+      status: "paid",
+      amount: String(payment.amount),
+      transactionRef: params.providerOrderId,
+      paidAt: now,
+    });
+
+    const customerId = order.customerId != null ? Number(order.customerId) : null;
     const earnedPoints = Math.floor(Math.max(0, Number(payment.amount)) / 1000);
 
     if (customerId && earnedPoints > 0) {
-      await applyCustomerPointsDelta(client, customerId, earnedPoints);
-
-      await client.query(
-        `
-        INSERT INTO coffee_chain_db.customer_point_transactions(
-          customer_id,
-          order_id,
-          points_change,
-          reason
-        )
-        VALUES ($1, $2, $3, $4)
-        `,
-        [
-          customerId,
-          payment.order_id,
-          earnedPoints,
-          `Earn from order ${String(order.order_code || payment.order_id)}`,
-        ]
-      );
+      try {
+        await tx
+          .update(customers)
+          .set({
+            points: sql`COALESCE(${customers.points}, 0) + ${earnedPoints}`,
+            updatedAt: now,
+          })
+          .where(eq(customers.id, customerId));
+      } catch (err) {
+        console.warn("[payments.repo] customer points update skipped:", err);
+      }
     }
-
-    await client.query("COMMIT");
 
     return {
       ok: true as const,
-      orderId: Number(payment.order_id),
+      orderId: Number(payment.orderId),
       amount: Number(payment.amount),
     };
-  } catch (error) {
-    await client.query("ROLLBACK");
-    throw error;
-  } finally {
-    client.release();
-  }
+  });
 }
 
 /** Lấy order để validate: id, final_amount, status. */
 export async function getOrderForPayment(orderId: number) {
-  const r = await pool.query(
-    `
-    SELECT id, final_amount, status
-    FROM coffee_chain_db.orders
-    WHERE id = $1
-    LIMIT 1
-    `,
-    [orderId]
-  );
-  return r.rows[0] ?? null;
+  const o = await db.query.orders.findFirst({
+    where: eq(orders.id, orderId),
+  });
+  if (!o) return null;
+  return {
+    id: o.id,
+    final_amount: Number(o.totalAmount || 0),
+    status: o.status,
+  };
 }
 
 /** Kiểm tra order đã có payment PAID chưa (qua gateway_payments hoặc order.status). */
 export async function isOrderAlreadyPaid(orderId: number): Promise<boolean> {
-  const byGateway = await pool.query(
-    `SELECT 1 FROM coffee_chain_db.gateway_payments WHERE order_id = $1 AND status = 'PAID' LIMIT 1`,
-    [orderId]
-  );
-  if (byGateway.rows[0]) return true;
+  const byGateway = await db.query.gatewayPayments.findFirst({
+    where: and(eq(gatewayPayments.orderId, orderId), eq(gatewayPayments.status, "PAID")),
+  });
+  if (byGateway) return true;
 
-  const order = await pool.query(
-    `SELECT status FROM coffee_chain_db.orders WHERE id = $1 LIMIT 1`,
-    [orderId]
-  );
-  const status = order.rows[0]?.status;
-  return status === "paid" || status === "completed";
+  const o = await db.query.orders.findFirst({
+    where: eq(orders.id, orderId),
+  });
+  const status = o?.status;
+  return (status as string) === "paid" || status === "completed";
 }
 
 /** Cập nhật order sang paid và ghi order_payments (gateway). */
@@ -307,32 +288,24 @@ export async function markOrderAsPaidByGateway(params: {
   amount: number;
   referenceCode: string;
 }) {
-  const client = await pool.connect();
-  try {
-    await client.query("BEGIN");
+  const now = new Date();
+  await db.transaction(async (tx) => {
+    await tx
+      .update(orders)
+      .set({
+        status: "completed",
+        isHold: false,
+        updatedAt: now,
+      })
+      .where(and(eq(orders.id, params.orderId), sql`${orders.status} NOT IN ('completed', 'cancelled', 'refunded')`));
 
-    await client.query(
-      `
-      UPDATE coffee_chain_db.orders
-      SET status = 'paid'
-      WHERE id = $1 AND status NOT IN ('paid', 'completed', 'voided', 'refunded')
-      `,
-      [params.orderId]
-    );
-
-    await client.query(
-      `
-      INSERT INTO coffee_chain_db.order_payments (order_id, method, amount, reference_code, paid_at)
-      VALUES ($1, 'gateway', $2, $3, NOW())
-      `,
-      [params.orderId, params.amount, params.referenceCode]
-    );
-
-    await client.query("COMMIT");
-  } catch (e) {
-    await client.query("ROLLBACK");
-    throw e;
-  } finally {
-    client.release();
-  }
+    await tx.insert(payments).values({
+      orderId: params.orderId,
+      method: "vietqr",
+      status: "paid",
+      amount: String(params.amount),
+      transactionRef: params.referenceCode,
+      paidAt: now,
+    });
+  });
 }

@@ -33,14 +33,16 @@ import inventoryDisposalRoutes from "../modules/inventory-disposals/inventoryDis
 import userDocumentsRoutes from "../modules/user-documents/userDocuments.routes";
 import profileUpdateRequestRoutes from "../modules/profile-update-request/profileUpdateRequest.routes";
 import storeManagerStaffRoutes from "../modules/store-manager-staff/storeManagerStaff.routes";
-
+import workspaceRoutes from "../modules/workspace/workspace.routes";
+import ownerMenuRoutes from "../modules/owner-menu/ownerMenu.routes";
 
 const router = Router();
 
 router.get(
   "/menu",
-  asyncHandler(async (_req, res) => {
-    const data = await getPosMenu();
+  asyncHandler(async (req, res) => {
+    const tenantId = (req as any).user?.tenantId;
+    const data = await getPosMenu(tenantId);
     res.json(data);
   })
 );
@@ -76,7 +78,8 @@ router.use("/inventory-receipts", inventoryReceiptRoutes);
 router.use("/inventory-disposals", inventoryDisposalRoutes);
 router.use("/user-documents", userDocumentsRoutes);
 router.use("/profile-update-request", profileUpdateRequestRoutes);
-
+router.use("/workspace", workspaceRoutes);
+router.use("/owner/menu", ownerMenuRoutes);
 
 export default router;
 

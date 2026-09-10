@@ -1,8 +1,10 @@
 import axios from "axios";
 import { token } from "../token";
 
+const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:3000/api";
+
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_URL,
+  baseURL: API_BASE_URL,
 });
 
 let refreshPromise: Promise<{ accessToken: string; refreshToken: string }> | null = null;
@@ -38,7 +40,7 @@ api.interceptors.response.use(
       try {
         if (!refreshPromise) {
           refreshPromise = axios
-            .post(`${import.meta.env.VITE_API_URL}/auth/refresh`, { refreshToken })
+            .post(`${API_BASE_URL}/auth/refresh`, { refreshToken })
             .then((r) => r.data);
         }
 

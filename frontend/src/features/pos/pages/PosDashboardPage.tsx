@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { useAuthStore } from "../../../app/store/auth.store";
+import { useAuthStore, isOwnerOrAdmin } from "../../../app/store/auth.store";
 
 type DashboardActionItem = {
   to?: string;
@@ -167,7 +167,9 @@ export default function PosDashboardPage() {
         <div
           style={{
             display: "grid",
-            gridTemplateColumns: "minmax(0, 1fr) 220px 180px",
+            gridTemplateColumns: isOwnerOrAdmin(user)
+              ? "minmax(0, 1fr) 200px 170px 140px"
+              : "minmax(0, 1fr) 220px 180px",
             gap: 16,
             alignItems: "stretch",
           }}
@@ -252,6 +254,37 @@ export default function PosDashboardPage() {
               {formatDate(now)}
             </div>
           </div>
+
+          {isOwnerOrAdmin(user) && (
+            <button
+              type="button"
+              onClick={() => navigate("/office/dashboard")}
+              style={{
+                minHeight: 112,
+                border: "none",
+                borderRadius: 24,
+                background: "#2B402D",
+                color: "#FAF6F3",
+                fontSize: 15,
+                fontWeight: 700,
+                fontFamily: "inherit",
+                cursor: "pointer",
+                boxShadow: "0 8px 18px rgba(43, 64, 45, 0.15)",
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: 4,
+                padding: "10px 14px",
+              }}
+            >
+              <span style={{ fontSize: 18 }}>🏢</span>
+              <span>Về Quản Trị</span>
+              <span style={{ fontSize: 11, fontWeight: 500, opacity: 0.8 }}>
+                (Office Hub)
+              </span>
+            </button>
+          )}
 
           <button
             type="button"

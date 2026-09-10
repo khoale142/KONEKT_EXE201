@@ -27,8 +27,9 @@ if (!connectionString) {
 // postgres.js client - dùng cho Drizzle
 const client = postgres(connectionString, {
   max: 10,                    // Connection pool size
-  idle_timeout: 20,           // Seconds before idle connection is closed
-  connect_timeout: 10,        // Seconds to wait for connection
+  idle_timeout: 120,          // Giữ kết nối trong pool 120s tránh cold TLS handshake lặp lại
+  connect_timeout: 30,        // Timeout 30s đảm bảo đường truyền quốc tế không bị gián đoạn
+  prepare: false,             // Bắt buộc đối với Supabase Pooler (PgBouncer)
 });
 
 // Drizzle instance - export để dùng xuyên suốt backend

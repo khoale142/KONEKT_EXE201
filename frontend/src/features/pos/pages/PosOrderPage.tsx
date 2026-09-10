@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
+import { useAuthStore, isOwnerOrAdmin } from "../../../app/store/auth.store";
 import {
   posGetMenu,
   type MenuCategory,
@@ -32,6 +33,13 @@ import {
   publishPosCustomerPreview,
   type PosCustomerPreviewSnapshot,
 } from "../utils/posCustomerPreviewSession";
+import PosReceiptModal, { type ReceiptOrderData } from "../components/PosReceiptModal";
+import {
+  DEFAULT_SETTINGS,
+  SERVICE_MODE_OPTIONS,
+  type PosSettingsData,
+} from "../components/PosSettingsModal";
+import { posGetStoreConfig } from "../api/orders.api";
 
 type CartKey = string;
 
@@ -267,16 +275,24 @@ function getVariantGridColumns(count: number) {
 
 export default function PosOrderPage() {
   const nav = useNavigate();
+  const user = useAuthStore((s) => s.user);
   const [sp] = useSearchParams();
 
   const specialModeHint = sp.get("special") === "1";
 
   const pickupNumber = Number(sp.get("pickup") || "");
-  const pickupOk =
-    Number.isFinite(pickupNumber) && pickupNumber >= 1 && pickupNumber <= 24;
-
   const heldOrderId = Number(sp.get("heldOrderId") || "");
   const isHeldMode = Number.isFinite(heldOrderId) && heldOrderId > 0;
+
+  // POS Modernized Settings & Identification State
+  const [posConfig, setPosConfig] = useState<PosSettingsData>(DEFAULT_SETTINGS);
+  const [serviceMode, setServiceMode] = useState<string>("table");
+  const [serviceIdentifier, setServiceIdentifier] = useState<string>("");
+  const [customerNameInput, setCustomerNameInput] = useState<string>("");
+  const [customerPhoneInput, setCustomerPhoneInput] = useState<string>("");
+  const [manualDiscountPercent, setManualDiscountPercent] = useState<number>(0);
+  const [receiptModalOpen, setReceiptModalOpen] = useState<boolean>(false);
+  const [receiptOrderData, setReceiptOrderData] = useState<ReceiptOrderData | null>(null);
 
   const [mode, setMode] = useState<PageMode>("cart");
 
@@ -307,7 +323,6 @@ export default function PosOrderPage() {
     specialModeHint ? "TEST" : "NORMAL"
   );
   const [specialNote, setSpecialNote] = useState("");
-  const [serviceMode, setServiceMode] = useState<PosServiceMode>("IN_STORE");
   const [orderTypePickerOpen, setOrderTypePickerOpen] = useState(false);
 
   const [offerMode, setOfferMode] = useState<"voucher" | "promotion">(
@@ -391,21 +406,37 @@ export default function PosOrderPage() {
   const [shiftWarning, setShiftWarning] = useState<string | null>(null);
 
   const effectivePickupNumber = heldMeta?.pickupNumber ?? pickupNumber;
-  const effectivePickupOk =
-    Number.isFinite(effectivePickupNumber) &&
-    effectivePickupNumber >= 1 &&
-    effectivePickupNumber <= 24;
+  const effectivePickupOk = true;
 
   const { data: vietqrPaymentStatus } = usePaymentStatus(gatewayOrderIdForVietqr, {
     refetchInterval: 2000,
   });
 
+  // Load POS Settings Config from storage & API
   useEffect(() => {
-    if (!pickupOk && !isHeldMode) {
-      nav("/pos/pickup", { replace: true });
-      return;
+    const cached = localStorage.getItem("konekt_pos_config");
+    if (cached) {
+      try {
+        const parsed = JSON.parse(cached);
+        setPosConfig((prev) => ({ ...prev, ...parsed }));
+        if (parsed.defaultServiceMode) {
+          setServiceMode(parsed.defaultServiceMode);
+        }
+      } catch (e) {}
     }
+    posGetStoreConfig()
+      .then((res) => {
+        if (res?.ok && res.config) {
+          setPosConfig((prev) => ({ ...prev, ...res.config }));
+          if (res.config.defaultServiceMode && !cached) {
+            setServiceMode(res.config.defaultServiceMode);
+          }
+        }
+      })
+      .catch(() => {});
+  }, []);
 
+  useEffect(() => {
     (async () => {
       setLoadingMenu(true);
       setShiftChecking(true);
@@ -442,7 +473,7 @@ export default function PosOrderPage() {
         setShiftChecking(false);
       }
     })();
-  }, [pickupOk, isHeldMode, nav]);
+  }, [nav]);
 
   // VietQR: backend là nguồn sự thật => chỉ cho phép tạo bill khi payment đã PAID
   useEffect(() => {
@@ -662,9 +693,18 @@ export default function PosOrderPage() {
     );
   }, [directItemsSubtotal, fixedComboSubtotal, appliedRuleSavings]);
 
-  const payableTotal = isSpecialOrderType(orderType)
-    ? 0
-    : heldMeta?.finalAmount ?? pricingPreview?.finalAmount ?? total;
+  const quickDiscountAmount = useMemo(() => {
+    if (isSpecialOrderType(orderType)) return 0;
+    if (manualDiscountPercent <= 0) return 0;
+    const base = heldMeta?.subtotalAmount ?? pricingPreview?.subtotalAmount ?? total;
+    return Math.round((base * manualDiscountPercent) / 100);
+  }, [orderType, manualDiscountPercent, heldMeta?.subtotalAmount, pricingPreview?.subtotalAmount, total]);
+
+  const payableTotal = useMemo(() => {
+    if (isSpecialOrderType(orderType)) return 0;
+    const raw = heldMeta?.finalAmount ?? pricingPreview?.finalAmount ?? total;
+    return Math.max(0, raw - quickDiscountAmount);
+  }, [orderType, heldMeta?.finalAmount, pricingPreview?.finalAmount, total, quickDiscountAmount]);
 
   const smartCashSuggestions = useMemo(
     () => getSmartCashSuggestions(payableTotal),
@@ -1665,7 +1705,6 @@ export default function PosOrderPage() {
       return setError("Đơn đặc biệt bắt buộc nhập lý do / ghi chú");
     }
 
-    if (!effectivePickupOk) return setError("Số thẻ không hợp lệ");
     if (!cartItems.length && !comboItems.length) {
       return setError("Chưa có món trong giỏ");
     }
@@ -1737,10 +1776,6 @@ export default function PosOrderPage() {
       return setError("Đang mở đơn giữ, không thể giữ lại thêm lần nữa");
     }
 
-    if (!effectivePickupOk) {
-      return setError("Số thẻ không hợp lệ");
-    }
-
     if (!cartItems.length && !comboItems.length) {
       return setError("Chưa có món trong giỏ");
     }
@@ -1759,12 +1794,15 @@ export default function PosOrderPage() {
       const trimmedOfferCode = appliedOfferCode.trim() || undefined;
 
       const r = await posHoldOrder({
-        pickupNumber: effectivePickupNumber,
+        pickupNumber: serviceMode === "table_marker" ? Number(serviceIdentifier) || undefined : undefined,
         customerId: member?.id,
         voucherCode: offerMode === "voucher" ? trimmedOfferCode : undefined,
         promotionCode: offerMode === "promotion" ? trimmedOfferCode : undefined,
         orderType,
         serviceMode,
+        serviceIdentifier: serviceIdentifier.trim() || undefined,
+        customerName: (serviceMode === "customer_name" ? customerNameInput.trim() : member?.fullName) || undefined,
+        customerPhone: (serviceMode === "customer_name" ? customerPhoneInput.trim() : phone.trim()) || undefined,
         specialNote: specialNote.trim() || undefined,
         selectedGiftItems,
         items: cartItems.map((x) => ({
@@ -1789,12 +1827,15 @@ export default function PosOrderPage() {
           selectedGiftItems,
           orderType,
           serviceMode,
+          serviceIdentifier,
+          customerName: customerNameInput,
+          customerPhone: customerPhoneInput,
           specialNote,
         },
       });
 
       setShiftWarning(r.shiftWarning?.message || null);
-      nav("/pos/held-orders", { replace: true });
+      nav("/pos/held", { replace: true });
     } catch (e: any) {
       setError(e?.response?.data?.message || e.message || "Hold order failed");
     } finally {
@@ -1811,34 +1852,39 @@ export default function PosOrderPage() {
         return setError("Chưa thanh toán xong. Vui lòng đợi trạng thái PAID từ backend.");
       }
 
-      setGatewayOrderIdForVietqr(null);
-      setVietqrQrImageUrl(null);
-      setVietqrOrderRef(null);
-      setVietqrExpiresAt(null);
-      setVietqrRemainingSec(0);
-      setReferenceCode("");
-
-      setCart({});
-      setComboCart({});
-      setEligibleRules([]);
-      setSelectedAppliedRules([]);
-      setSelectedGiftItems([]);
-      setGiftPickerOpen(false);
-      setGiftPickerQtyMap({});
-      setGiftPickerNotes({});
-      setCashPreset("exact");
-      setCustomCashInput("");
-      setPaymentChecked(false);
-      setOfferCode("");
-      setAppliedOfferCode("");
-      setPricingPreview(null);
-      setMode("cart");
-      setOrderType(specialModeHint ? "TEST" : "NORMAL");
-      setSpecialNote("");
-      setServiceMode("IN_STORE");
-      setOrderTypePickerOpen(false);
-
-      nav("/pos/pickup", { replace: true });
+      const sLabel = SERVICE_MODE_OPTIONS.find((m) => m.id === serviceMode)?.label || "Số Bàn";
+      setReceiptOrderData({
+        orderId: gatewayOrderIdForVietqr,
+        orderCode: vietqrOrderRef || `VQR-${Date.now()}`,
+        createdAt: new Date().toLocaleString("vi-VN"),
+        cashierName: user?.fullName || user?.username || "Thu ngân",
+        serviceModeLabel: sLabel,
+        serviceIdentifier: serviceIdentifier.trim() || undefined,
+        customerName: (serviceMode === "customer_name" ? customerNameInput.trim() : member?.fullName) || undefined,
+        customerPhone: (serviceMode === "customer_name" ? customerPhoneInput.trim() : phone.trim()) || undefined,
+        items: cartItems.map((it) => ({
+          name: it.productName,
+          size: it.size || undefined,
+          qty: it.qty,
+          price: it.price,
+          note: it.note,
+        })),
+        combos: comboItems.map((cb) => ({
+          name: cb.name,
+          qty: cb.qty,
+          price: cb.comboPrice,
+        })),
+        giftItems: selectedGiftItems.map((g) => ({
+          name: `Món quà #${g.productVariantId}`,
+          qty: g.quantity,
+        })),
+        subtotal: total,
+        discountAmount: quickDiscountAmount + (pricingPreview?.totalDiscountAmount || 0),
+        discountReason: manualDiscountPercent > 0 ? `Giảm ${manualDiscountPercent}%` : undefined,
+        finalAmount: payableTotal,
+        paymentMethod: "transfer",
+      });
+      setReceiptModalOpen(true);
       return;
     }
 
@@ -1882,13 +1928,18 @@ export default function PosOrderPage() {
           },
         })
         : await posCreateOrder({
-          pickupNumber: effectivePickupNumber,
+          pickupNumber: serviceMode === "table_marker" ? Number(serviceIdentifier) || undefined : undefined,
           customerId: member?.id,
           voucherCode: offerMode === "voucher" ? trimmedOfferCode : undefined,
           promotionCode:
             offerMode === "promotion" ? trimmedOfferCode : undefined,
           orderType,
           serviceMode,
+          serviceIdentifier: serviceIdentifier.trim() || undefined,
+          customerName: (serviceMode === "customer_name" ? customerNameInput.trim() : member?.fullName) || undefined,
+          customerPhone: (serviceMode === "customer_name" ? customerPhoneInput.trim() : phone.trim()) || undefined,
+          discountReason: manualDiscountPercent > 0 ? `Giảm ${manualDiscountPercent}%` : undefined,
+          discountAmount: quickDiscountAmount + (pricingPreview?.totalDiscountAmount || 0),
           specialNote: specialNote.trim() || undefined,
           selectedGiftItems,
           items: cartItems.map((x) => ({
@@ -2026,29 +2077,42 @@ export default function PosOrderPage() {
         updatedAt: new Date().toISOString(),
       });
 
-      setHeldMeta(null);
-      setCart({});
-      setComboCart({});
-      setEligibleRules([]);
-      setSelectedAppliedRules([]);
-      setSelectedGiftItems([]);
-      setGiftPickerOpen(false);
-      setGiftPickerQtyMap({});
-      setGiftPickerNotes({});
-      setReferenceCode("");
-      setCashPreset("exact");
-      setCustomCashInput("");
-      setPaymentChecked(false);
-      setOfferCode("");
-      setAppliedOfferCode("");
-      setPricingPreview(null);
-      setMode("cart");
-      setOrderType(specialModeHint ? "TEST" : "NORMAL");
-      setSpecialNote("");
-      setServiceMode("IN_STORE");
-      setOrderTypePickerOpen(false);
-
-      nav("/pos/pickup", { replace: true });
+      // Mở Modal Hóa Đơn In Nhiệt Chuyên Nghiệp
+      const serviceModeLabel = SERVICE_MODE_OPTIONS.find((m) => m.id === serviceMode)?.label || "Số Bàn";
+      setReceiptOrderData({
+        orderId: r.order.id,
+        orderCode: r.order.orderCode,
+        createdAt: new Date().toLocaleString("vi-VN"),
+        cashierName: user?.fullName || user?.username || "Thu ngân",
+        serviceModeLabel,
+        serviceIdentifier: serviceIdentifier.trim() || undefined,
+        customerName: (serviceMode === "customer_name" ? customerNameInput.trim() : member?.fullName) || undefined,
+        customerPhone: (serviceMode === "customer_name" ? customerPhoneInput.trim() : phone.trim()) || undefined,
+        items: cartItems.map((item) => ({
+          name: item.productName,
+          size: item.size || undefined,
+          qty: item.qty,
+          price: item.price,
+          note: item.note,
+        })),
+        combos: comboItems.map((cb) => ({
+          name: cb.name,
+          qty: cb.qty,
+          price: cb.comboPrice,
+        })),
+        giftItems: selectedGiftItems.map((g) => ({
+          name: `Món quà #${g.productVariantId}`,
+          qty: g.quantity,
+        })),
+        subtotal: total,
+        discountAmount: quickDiscountAmount + (pricingPreview?.totalDiscountAmount || 0),
+        discountReason: manualDiscountPercent > 0 ? `Giảm ${manualDiscountPercent}%` : undefined,
+        finalAmount: r.order.finalAmount,
+        paymentMethod: r.payment?.method || paymentMethod,
+        cashReceived: paymentMethod === "cash" ? cashReceived : undefined,
+        changeAmount: paymentMethod === "cash" ? cashChange : undefined,
+      });
+      setReceiptModalOpen(true);
     } catch (e: any) {
       setError(
         e?.response?.data?.message ||
@@ -2058,6 +2122,42 @@ export default function PosOrderPage() {
     } finally {
       setCreating(false);
     }
+  };
+
+  const handleNewOrder = () => {
+    setReceiptModalOpen(false);
+    setReceiptOrderData(null);
+    setHeldMeta(null);
+    setCart({});
+    setComboCart({});
+    setEligibleRules([]);
+    setSelectedAppliedRules([]);
+    setSelectedGiftItems([]);
+    setGiftPickerOpen(false);
+    setGiftPickerQtyMap({});
+    setGiftPickerNotes({});
+    setReferenceCode("");
+    setCashPreset("exact");
+    setCustomCashInput("");
+    setPaymentChecked(false);
+    setOfferCode("");
+    setAppliedOfferCode("");
+    setPricingPreview(null);
+    setMode("cart");
+    setOrderType(specialModeHint ? "TEST" : "NORMAL");
+    setSpecialNote("");
+    setManualDiscountPercent(0);
+    if (serviceMode !== "table") {
+      setServiceIdentifier("");
+    }
+    setCustomerNameInput("");
+    setCustomerPhoneInput("");
+    setGatewayOrderIdForVietqr(null);
+    setVietqrQrImageUrl(null);
+    setVietqrOrderRef(null);
+    setVietqrExpiresAt(null);
+    setVietqrRemainingSec(0);
+    setCreated(null);
   };
 
   const payWithVietqr = async () => {
@@ -2431,8 +2531,25 @@ export default function PosOrderPage() {
             <div className="pos-topbar__eyebrow">Cashier workstation</div>
             <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
               <button onClick={() => nav("/pos", { replace: true })}>
-                Ve Dashboard
+                Về Dashboard
               </button>
+              {isOwnerOrAdmin(user) && (
+                <button
+                  onClick={() => nav("/office/dashboard")}
+                  style={{
+                    background: "#2B402D",
+                    color: "#FAF6F3",
+                    fontWeight: 700,
+                    borderRadius: 8,
+                    padding: "6px 12px",
+                    border: "none",
+                    cursor: "pointer",
+                    fontSize: 13,
+                  }}
+                >
+                  🏢 Về Quản trị
+                </button>
+              )}
               <h2 className="pos-topbar__title" style={{ margin: 0 }}>
                 POS - {heldMeta ? "Thanh toan don giu" : "Tao order"}
                 {mode === "combo" ? " / Chon combo" : ""}
@@ -2442,18 +2559,32 @@ export default function PosOrderPage() {
             </div>
           </div>
 
-          <div className="pos-meta-row">
-            <div className="pos-badge">
-              <b>So the:</b> {effectivePickupNumber}
+          <div className="pos-meta-row" style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <div
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 6,
+                padding: "6px 14px",
+                borderRadius: 10,
+                backgroundColor: "#EBF1EB",
+                border: "1px solid #C4BDAC",
+                fontSize: 13,
+                fontWeight: 700,
+                color: "#1E2C20",
+              }}
+            >
+              <span>{SERVICE_MODE_OPTIONS.find((m) => m.id === serviceMode)?.icon || "🪑"}</span>
+              <span>
+                {SERVICE_MODE_OPTIONS.find((m) => m.id === serviceMode)?.label || "Số Bàn"}
+                {serviceIdentifier ? `: ${serviceIdentifier}` : ""}
+              </span>
             </div>
             {isSpecialOrderType(orderType) ? (
               <div className="pos-badge pos-badge--warning">
                 {getOrderTypeLabel(orderType)}
               </div>
             ) : null}
-            <button onClick={() => nav("/pos/pickup")} disabled={!!heldMeta}>
-              Doi so
-            </button>
           </div>
         </div>
 
@@ -2538,7 +2669,7 @@ export default function PosOrderPage() {
                         disabled={orderBlocked || editingLocked}
                         style={activeStyle}
                       >
-                        {CATEGORY_LABEL[c.key] || c.key}
+                        {c.name || CATEGORY_LABEL[c.key] || c.key}
                       </button>
                     );
                   })}
@@ -2558,7 +2689,7 @@ export default function PosOrderPage() {
                     <h3 style={{ margin: 0 }}>
                       {allProductsFiltered
                         ? "Ket qua tim kiem"
-                        : CATEGORY_LABEL[activeCat] || activeCat}
+                        : active?.name || CATEGORY_LABEL[activeCat] || activeCat}
                     </h3>
 
                     <div style={{ fontSize: 13, color: "#6b5b4d" }}>
@@ -3638,34 +3769,161 @@ export default function PosOrderPage() {
                 </div>
 
                 <div style={{ border: "1px solid #ece7df", borderRadius: 12, padding: 12 }}>
-                  <div style={railSectionTitleStyle}>Kieu phuc vu</div>
-                  <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 10 }}>
-                    {(["IN_STORE", "TAKE_AWAY"] as PosServiceMode[]).map((modeValue) => {
-                      const activeMode = serviceMode === modeValue;
+                  <div style={railSectionTitleStyle}>Chế độ nhận món & Định danh</div>
+                  
+                  {/* Selector các chế độ phục vụ */}
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 10 }}>
+                    {SERVICE_MODE_OPTIONS.filter((opt) => (posConfig.enabledServiceModes || []).includes(opt.id)).map((opt) => {
+                      const activeMode = serviceMode === opt.id;
                       return (
                         <button
-                          key={modeValue}
+                          key={opt.id}
                           type="button"
                           onClick={() => {
-                            setServiceMode(modeValue);
+                            setServiceMode(opt.id);
                             setPaymentChecked(false);
                           }}
                           disabled={mode === "payment" || !!gatewayOrderIdForVietqr}
                           style={{
-                            minHeight: 56,
-                            padding: "10px 12px",
-                            borderRadius: 12,
-                            border: activeMode ? "1px solid #6f5846" : "1px solid #ddd",
-                            background: activeMode ? "#6f5846" : "#fff",
-                            color: activeMode ? "#fff" : "#2d4732",
-                            fontWeight: 700,
+                            padding: "6px 10px",
+                            borderRadius: 8,
+                            border: activeMode ? "1px solid #2D3E2F" : "1px solid #DFD9CE",
+                            backgroundColor: activeMode ? "#2D3E2F" : "#FFFFFF",
+                            color: activeMode ? "#FFFFFF" : "#1E2C20",
+                            fontSize: 12,
+                            fontWeight: activeMode ? 700 : 500,
+                            cursor: "pointer",
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 4,
                           }}
                         >
-                          {modeValue === "IN_STORE" ? "Tai quan" : "Mang di"}
+                          <span>{opt.icon}</span>
+                          <span>{opt.label}</span>
                         </button>
                       );
                     })}
                   </div>
+
+                  {/* Chi tiết theo từng chế độ */}
+                  {serviceMode === "table" && (
+                    <div>
+                      <input
+                        value={serviceIdentifier}
+                        onChange={(e) => setServiceIdentifier(e.target.value)}
+                        placeholder="Nhập số/tên bàn (VD: Bàn 01, VIP 2...)"
+                        disabled={mode === "payment" || editingLocked}
+                        style={{
+                          width: "100%",
+                          padding: "8px 12px",
+                          borderRadius: 8,
+                          border: "1px solid #DFD9CE",
+                          fontSize: 13,
+                          marginBottom: 8,
+                          boxSizing: "border-box",
+                        }}
+                      />
+                      {/* Bàn nhanh */}
+                      {posConfig.quickTables && posConfig.quickTables.length > 0 && (
+                        <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                          {posConfig.quickTables.map((t) => {
+                            const isTSelected = serviceIdentifier === t;
+                            return (
+                              <button
+                                key={t}
+                                type="button"
+                                onClick={() => setServiceIdentifier(t)}
+                                disabled={mode === "payment" || editingLocked}
+                                style={{
+                                  padding: "4px 8px",
+                                  borderRadius: 6,
+                                  border: isTSelected ? "1px solid #2D3E2F" : "1px solid #DFD9CE",
+                                  backgroundColor: isTSelected ? "#EBF1EB" : "#FFFFFF",
+                                  color: isTSelected ? "#2D3E2F" : "#555",
+                                  fontSize: 11,
+                                  fontWeight: isTSelected ? 700 : 500,
+                                  cursor: "pointer",
+                                }}
+                              >
+                                {t}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {serviceMode === "table_marker" && (
+                    <input
+                      value={serviceIdentifier}
+                      onChange={(e) => setServiceIdentifier(e.target.value)}
+                      placeholder="Nhập số thẻ để bàn (VD: 01, 12...)"
+                      disabled={mode === "payment" || editingLocked}
+                      style={{
+                        width: "100%",
+                        padding: "8px 12px",
+                        borderRadius: 8,
+                        border: "1px solid #DFD9CE",
+                        fontSize: 13,
+                        boxSizing: "border-box",
+                      }}
+                    />
+                  )}
+
+                  {serviceMode === "queue_number" && (
+                    <input
+                      value={serviceIdentifier}
+                      onChange={(e) => setServiceIdentifier(e.target.value)}
+                      placeholder="Số thứ tự đơn (tự động in trên bill)"
+                      disabled={mode === "payment" || editingLocked}
+                      style={{
+                        width: "100%",
+                        padding: "8px 12px",
+                        borderRadius: 8,
+                        border: "1px solid #DFD9CE",
+                        fontSize: 13,
+                        boxSizing: "border-box",
+                      }}
+                    />
+                  )}
+
+                  {serviceMode === "customer_name" && (
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+                      <input
+                        value={customerNameInput}
+                        onChange={(e) => setCustomerNameInput(e.target.value)}
+                        placeholder="Tên khách hàng"
+                        disabled={mode === "payment" || editingLocked}
+                        style={{
+                          padding: "8px 10px",
+                          borderRadius: 8,
+                          border: "1px solid #DFD9CE",
+                          fontSize: 12,
+                          boxSizing: "border-box",
+                        }}
+                      />
+                      <input
+                        value={customerPhoneInput}
+                        onChange={(e) => setCustomerPhoneInput(e.target.value)}
+                        placeholder="Số ĐT nhận món"
+                        disabled={mode === "payment" || editingLocked}
+                        style={{
+                          padding: "8px 10px",
+                          borderRadius: 8,
+                          border: "1px solid #DFD9CE",
+                          fontSize: 12,
+                          boxSizing: "border-box",
+                        }}
+                      />
+                    </div>
+                  )}
+
+                  {serviceMode === "none" && (
+                    <div style={{ fontSize: 12, color: "#667064", fontStyle: "italic" }}>
+                      ⚡ Bán nhanh - Khách nhận đồ ngay tại quầy
+                    </div>
+                  )}
                 </div>
               </div>            </div>
 
@@ -3784,6 +4042,60 @@ export default function PosOrderPage() {
                     </div>
                   );
                 })}
+              </div>
+
+              {/* Giảm giá nhanh (% Quick Discounts) */}
+              <div style={{ border: "1px solid #ece7df", borderRadius: 12, padding: 12 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+                  <div style={railSectionTitleStyle}>Giảm giá nhanh (% Chiết khấu)</div>
+                  {manualDiscountPercent > 0 && (
+                    <span style={{ fontSize: 12, fontWeight: 700, color: "#2E7D32" }}>
+                      Giảm {manualDiscountPercent}% (-{formatMoney(quickDiscountAmount)})
+                    </span>
+                  )}
+                </div>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                  <button
+                    type="button"
+                    onClick={() => setManualDiscountPercent(0)}
+                    disabled={mode === "payment" || editingLocked || isSpecialOrderType(orderType)}
+                    style={{
+                      padding: "5px 10px",
+                      borderRadius: 8,
+                      border: manualDiscountPercent === 0 ? "1px solid #2D3E2F" : "1px solid #DFD9CE",
+                      backgroundColor: manualDiscountPercent === 0 ? "#EBF1EB" : "#FFFFFF",
+                      color: manualDiscountPercent === 0 ? "#2D3E2F" : "#555",
+                      fontSize: 12,
+                      fontWeight: manualDiscountPercent === 0 ? 700 : 500,
+                      cursor: "pointer",
+                    }}
+                  >
+                    0%
+                  </button>
+                  {(posConfig.quickDiscounts || [5, 10, 15, 20, 50, 100]).map((disc) => {
+                    const isSelected = manualDiscountPercent === disc;
+                    return (
+                      <button
+                        key={disc}
+                        type="button"
+                        onClick={() => setManualDiscountPercent(isSelected ? 0 : disc)}
+                        disabled={mode === "payment" || editingLocked || isSpecialOrderType(orderType)}
+                        style={{
+                          padding: "5px 10px",
+                          borderRadius: 8,
+                          border: isSelected ? "1px solid #2D3E2F" : "1px solid #DFD9CE",
+                          backgroundColor: isSelected ? "#2D3E2F" : "#FFFFFF",
+                          color: isSelected ? "#FFFFFF" : "#1E2C20",
+                          fontSize: 12,
+                          fontWeight: isSelected ? 700 : 500,
+                          cursor: "pointer",
+                        }}
+                      >
+                        {disc === 100 ? "100% (Free)" : `${disc}%`}
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
 
               <div style={{ border: "1px solid #ece7df", borderRadius: 12, padding: 12 }}>
@@ -4177,6 +4489,15 @@ export default function PosOrderPage() {
           </div>
         </div>
       ) : null}
+
+      {/* Modal In Hóa Đơn Chuẩn K80/K58 */}
+      <PosReceiptModal
+        open={receiptModalOpen}
+        order={receiptOrderData}
+        config={posConfig}
+        onClose={() => setReceiptModalOpen(false)}
+        onNewOrder={handleNewOrder}
+      />
     </div>
   );
 }

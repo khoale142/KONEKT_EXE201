@@ -65,7 +65,7 @@ export async function applyCustomerPointsDelta(
 ): Promise<{ points: number; level: MembershipLevel }> {
   const r = await client.query(
     `
-      UPDATE coffee_chain_db.customers
+      UPDATE public.customers
       SET points = COALESCE(points, 0) + $1,
           level = CASE
             WHEN (COALESCE(points, 0) + $1) >= $2 THEN 'platinum'

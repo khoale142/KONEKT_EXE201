@@ -1,6 +1,8 @@
-﻿import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
+import { UserPlus } from "lucide-react";
 import { fetchHrEmployeeDirectory } from "../api/hrEmployeeDirectory.api";
+import { workspaceApi } from "../../../workspace/api/workspace.api";
 import type { HrEmployeeRow } from "../types/hr.types";
 import HrPageHeader from "../components/HrPageHeader";
 import { employmentTypeLabelVi } from "../../../shared/utils/employmentShiftTypes";
@@ -22,6 +24,7 @@ export default function HREmployeesPage() {
   const [rows, setRows] = useState<HrEmployeeRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [pendingStaffCount, setPendingStaffCount] = useState(0);
   const [q, setQ] = useState("");
   const [storeFilter, setStoreFilter] = useState<number | "all">("all");
   const [roleFilter, setRoleFilter] = useState("");
@@ -36,6 +39,14 @@ export default function HREmployeesPage() {
         setError(msg || "Không tải được danh sách");
       })
       .finally(() => setLoading(false));
+
+    workspaceApi
+      .getStaffRequests()
+      .then((res) => {
+        const p = res.filter((r) => r.status === "pending").length;
+        setPendingStaffCount(p);
+      })
+      .catch(() => {});
   }, []);
 
   const storeOptions = useMemo(() => {
@@ -88,6 +99,43 @@ export default function HREmployeesPage() {
       />
 
       {error ? <p style={{ color: "#c53030" }}>{error}</p> : null}
+
+      {/* Pending staff requests alert banner */}
+      {pendingStaffCount > 0 && (
+        <div
+          style={{
+            background: "#FFFBEB",
+            border: "1px solid #FDE68A",
+            borderRadius: 12,
+            padding: "12px 18px",
+            marginBottom: 18,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            flexWrap: "wrap",
+            gap: 10,
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: 10, color: "#92400E" }}>
+            <UserPlus size={18} />
+            <span style={{ fontSize: 13.5, fontWeight: 700 }}>
+              Có {pendingStaffCount} ứng viên vừa nhập mã mời chi nhánh đang chờ bạn phê duyệt và phân quyền tính năng.
+            </span>
+          </div>
+          <a
+            href="/office/hr?tab=requests"
+            style={{
+              fontSize: 13,
+              fontWeight: 700,
+              color: "#B45309",
+              textDecoration: "underline",
+              cursor: "pointer",
+            }}
+          >
+            Xem và duyệt ngay →
+          </a>
+        </div>
+      )}
 
       {/* Statistics Bar */}
       {!loading && (

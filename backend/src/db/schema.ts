@@ -10,6 +10,7 @@ import {
   pgEnum,
   uniqueIndex,
   index,
+  jsonb,
 } from 'drizzle-orm/pg-core';
 import { relations } from 'drizzle-orm';
 
@@ -92,11 +93,14 @@ export const stores = pgTable('stores', {
   name: varchar('name', { length: 255 }).notNull(),
   address: text('address'),
   phone: varchar('phone', { length: 20 }),
+  inviteCode: varchar('invite_code', { length: 50 }).unique(),
   isActive: boolean('is_active').default(true).notNull(),
+  posConfig: jsonb('pos_config'),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
 }, (table) => [
   index('idx_stores_tenant_id').on(table.tenantId),
+  index('idx_stores_invite_code').on(table.inviteCode),
 ]);
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -106,7 +110,7 @@ export const stores = pgTable('stores', {
 
 export const users = pgTable('users', {
   id: serial('id').primaryKey(),
-  tenantId: integer('tenant_id').references(() => tenants.id, { onDelete: 'cascade' }).notNull(),
+  tenantId: integer('tenant_id').references(() => tenants.id, { onDelete: 'cascade' }),
   storeId: integer('store_id').references(() => stores.id, { onDelete: 'set null' }),
   username: varchar('username', { length: 100 }).notNull(),
   email: varchar('email', { length: 255 }).notNull(),
@@ -114,6 +118,7 @@ export const users = pgTable('users', {
   fullName: varchar('full_name', { length: 255 }),
   phone: varchar('phone', { length: 20 }),
   role: userRoleEnum('role').default('staff').notNull(),
+  customPermissions: jsonb('custom_permissions').$type<string[]>().default([]),
   isActive: boolean('is_active').default(true).notNull(),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
@@ -125,12 +130,42 @@ export const users = pgTable('users', {
 ]);
 
 // ─────────────────────────────────────────────────────────────────────────────
-// 4. PRODUCT_CATEGORIES – Danh mục sản phẩm
+// 3b. STORE_JOIN_REQUESTS – Yêu cầu gia nhập Store bằng mã mời nội bộ
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const storeJoinRequests = pgTable('store_join_requests', {
+  id: serial('id').primaryKey(),
+  tenantId: integer('tenant_id').references(() => tenants.id, { onDelete: 'cascade' }).notNull(),
+  storeId: integer('store_id').references(() => stores.id, { onDelete: 'cascade' }).notNull(),
+  userId: integer('user_id').references(() => users.id, { onDelete: 'set null' }),
+  email: varchar('email', { length: 255 }).notNull(),
+  fullName: varchar('full_name', { length: 255 }).notNull(),
+  phone: varchar('phone', { length: 20 }),
+  desiredPosition: varchar('desired_position', { length: 100 }),
+  note: text('note'),
+  status: varchar('status', { length: 20 }).default('pending').notNull(), // 'pending' | 'approved' | 'rejected'
+  assignedRole: varchar('assigned_role', { length: 50 }),
+  customPermissions: jsonb('custom_permissions').$type<string[]>(),
+  approvedBy: integer('approved_by').references(() => users.id, { onDelete: 'set null' }),
+  rejectedReason: text('rejected_reason'),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+}, (table) => [
+  index('idx_store_join_requests_tenant').on(table.tenantId),
+  index('idx_store_join_requests_store').on(table.storeId),
+  index('idx_store_join_requests_email').on(table.email),
+  index('idx_store_join_requests_status').on(table.status),
+]);
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 4. PRODUCT_CATEGORIES – Danh mục sản phẩm & vật tư phân cấp
 // ─────────────────────────────────────────────────────────────────────────────
 
 export const productCategories = pgTable('product_categories', {
   id: serial('id').primaryKey(),
   tenantId: integer('tenant_id').references(() => tenants.id, { onDelete: 'cascade' }).notNull(),
+  parentId: integer('parent_id').references((): any => productCategories.id, { onDelete: 'cascade' }),
+  scope: varchar('scope', { length: 50 }).default('product').notNull(), // 'product' | 'raw_material' | 'semi_finished'
   name: varchar('name', { length: 255 }).notNull(),
   description: text('description'),
   sortOrder: integer('sort_order').default(0),
@@ -138,6 +173,8 @@ export const productCategories = pgTable('product_categories', {
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
 }, (table) => [
   index('idx_product_categories_tenant').on(table.tenantId),
+  index('idx_product_categories_parent').on(table.parentId),
+  index('idx_product_categories_scope').on(table.scope),
 ]);
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -194,6 +231,78 @@ export const productToppings = pgTable('product_toppings', {
 ]);
 
 // ─────────────────────────────────────────────────────────────────────────────
+// 7b. INGREDIENTS – Danh mục nguyên vật liệu pha chế (Cafe, Sữa, Trà,...)
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const ingredients = pgTable('ingredients', {
+  id: serial('id').primaryKey(),
+  tenantId: integer('tenant_id').references(() => tenants.id, { onDelete: 'cascade' }).notNull(),
+  categoryId: integer('category_id').references(() => productCategories.id, { onDelete: 'set null' }),
+  itemType: varchar('item_type', { length: 30 }).default('raw').notNull(), // 'raw' | 'semi_finished'
+  name: varchar('name', { length: 255 }).notNull(),
+  code: varchar('code', { length: 50 }),
+  unit: varchar('unit', { length: 50 }).notNull(), // 'g', 'ml', 'qua', 'goi', 'lon'
+  costPerUnit: decimal('cost_per_unit', { precision: 12, scale: 2 }).default('0').notNull(),
+  batchYield: decimal('batch_yield', { precision: 12, scale: 3 }).default('1').notNull(), // Sản lượng 1 mẻ chuẩn của BTP
+  minThreshold: decimal('min_threshold', { precision: 12, scale: 2 }).default('0'),
+  currentStock: decimal('current_stock', { precision: 12, scale: 2 }).default('0'),
+  isActive: boolean('is_active').default(true).notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+}, (table) => [
+  index('idx_ingredients_tenant').on(table.tenantId),
+  index('idx_ingredients_category').on(table.categoryId),
+  index('idx_ingredients_item_type').on(table.itemType),
+  index('idx_ingredients_code').on(table.code),
+]);
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 7c. PRODUCT_RECIPES – Định lượng công thức pha chế (Bill of Materials - BOM)
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const productRecipes = pgTable('product_recipes', {
+  id: serial('id').primaryKey(),
+  tenantId: integer('tenant_id').references(() => tenants.id, { onDelete: 'cascade' }).notNull(),
+  productId: integer('product_id').references(() => products.id, { onDelete: 'cascade' }).notNull(),
+  variantId: integer('variant_id').references(() => productVariants.id, { onDelete: 'cascade' }), // Nullable = áp dụng cho mọi size
+  ingredientId: integer('ingredient_id').references(() => ingredients.id, { onDelete: 'cascade' }).notNull(),
+  quantity: decimal('quantity', { precision: 12, scale: 3 }).notNull(), // 25.000 (g), 40.000 (ml)
+  unit: varchar('unit', { length: 50 }).notNull(),
+  wasteRatePercent: decimal('waste_rate_percent', { precision: 5, scale: 2 }).default('0'),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+}, (table) => [
+  index('idx_product_recipes_tenant').on(table.tenantId),
+  index('idx_product_recipes_product').on(table.productId),
+  index('idx_product_recipes_variant').on(table.variantId),
+  index('idx_product_recipes_ingredient').on(table.ingredientId),
+  index('idx_product_recipes_prod_var').on(table.productId, table.variantId),
+  uniqueIndex('idx_product_recipes_unique').on(table.productId, table.variantId, table.ingredientId),
+]);
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 7d. SEMI_FINISHED_RECIPES – Định lượng công thức Bán thành phẩm (Sub-BOM)
+//     Ví dụ: Cốt cafe phin (1000ml) = 250g bột cafe + 1100ml nước sôi (hao hụt 10%)
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const semiFinishedRecipes = pgTable('semi_finished_recipes', {
+  id: serial('id').primaryKey(),
+  tenantId: integer('tenant_id').references(() => tenants.id, { onDelete: 'cascade' }).notNull(),
+  semiFinishedId: integer('semi_finished_id').references(() => ingredients.id, { onDelete: 'cascade' }).notNull(),
+  ingredientId: integer('ingredient_id').references(() => ingredients.id, { onDelete: 'cascade' }).notNull(),
+  quantity: decimal('quantity', { precision: 12, scale: 3 }).notNull(),
+  unit: varchar('unit', { length: 50 }).notNull(),
+  wasteRatePercent: decimal('waste_rate_percent', { precision: 5, scale: 2 }).default('0'),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+}, (table) => [
+  index('idx_semi_recipes_tenant').on(table.tenantId),
+  index('idx_semi_recipes_semi').on(table.semiFinishedId),
+  index('idx_semi_recipes_ing').on(table.ingredientId),
+  uniqueIndex('idx_semi_recipes_unique').on(table.semiFinishedId, table.ingredientId),
+]);
+
+// ─────────────────────────────────────────────────────────────────────────────
 // 8. ORDERS – Hóa đơn bán hàng
 //    Luôn filter theo tenant_id (Row-Level Tenancy).
 // ─────────────────────────────────────────────────────────────────────────────
@@ -209,8 +318,16 @@ export const orders = pgTable('orders', {
   subtotalAmount: decimal('subtotal_amount', { precision: 12, scale: 2 }).default('0').notNull(),
   discountAmount: decimal('discount_amount', { precision: 12, scale: 2 }).default('0').notNull(),
   totalAmount: decimal('total_amount', { precision: 12, scale: 2 }).default('0').notNull(),
+  orderType: varchar('order_type', { length: 50 }).default('dine_in').notNull(), // 'dine_in' | 'take_away' | 'quick_counter' | 'delivery'
+  serviceMode: varchar('service_mode', { length: 50 }).default('none').notNull(), // 'table' | 'table_marker' | 'queue_number' | 'customer_name' | 'none'
+  serviceIdentifier: varchar('service_identifier', { length: 150 }), // "Bàn 05", "Thẻ số 12", "#008", "Chị Mai"
+  queueNumber: integer('queue_number'),
+  customerName: varchar('customer_name', { length: 150 }),
+  customerPhone: varchar('customer_phone', { length: 50 }),
+  discountReason: varchar('discount_reason', { length: 255 }),
   notes: text('notes'),
   isHold: boolean('is_hold').default(false).notNull(),
+  snapshot: jsonb('snapshot'),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
 }, (table) => [
@@ -219,6 +336,8 @@ export const orders = pgTable('orders', {
   index('idx_orders_store').on(table.storeId),
   index('idx_orders_cashier').on(table.cashierId),
   index('idx_orders_status').on(table.status),
+  index('idx_orders_is_hold').on(table.isHold),
+  index('idx_orders_queue_number').on(table.queueNumber),
   index('idx_orders_created').on(table.createdAt),
 ]);
 
@@ -267,6 +386,33 @@ export const payments = pgTable('payments', {
 ]);
 
 // ─────────────────────────────────────────────────────────────────────────────
+// 10b. GATEWAY_PAYMENTS – Thanh toán qua cổng thanh toán / VietQR Quicklink
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const gatewayPayments = pgTable('gateway_payments', {
+  id: serial('id').primaryKey(),
+  orderId: integer('order_id').references(() => orders.id, { onDelete: 'cascade' }).notNull(),
+  provider: varchar('provider', { length: 50 }).notNull(), // 'vietqr', 'casso', 'payos'
+  providerOrderId: varchar('provider_order_id', { length: 255 }),
+  requestId: varchar('request_id', { length: 100 }).unique().notNull(),
+  amount: decimal('amount', { precision: 12, scale: 2 }).notNull(),
+  status: varchar('status', { length: 50 }).default('PENDING').notNull(),
+  payUrl: text('pay_url'),
+  deeplink: text('deeplink'),
+  qrCodeUrl: text('qr_code_url'),
+  rawRequest: jsonb('raw_request'),
+  rawResponse: jsonb('raw_response'),
+  expiredAt: timestamp('expired_at', { withTimezone: true }),
+  paidAt: timestamp('paid_at', { withTimezone: true }),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+}, (table) => [
+  index('idx_gateway_payments_order').on(table.orderId),
+  index('idx_gateway_payments_request').on(table.requestId),
+  index('idx_gateway_payments_status').on(table.status),
+]);
+
+// ─────────────────────────────────────────────────────────────────────────────
 // 11. SHIFT_SESSIONS – Ca làm việc / Đối soát két tiền
 //     Mở ca → Bán hàng → Đóng ca → Đếm tiền → Đối soát chênh lệch.
 // ─────────────────────────────────────────────────────────────────────────────
@@ -294,15 +440,182 @@ export const shiftSessions = pgTable('shift_sessions', {
 ]);
 
 // ─────────────────────────────────────────────────────────────────────────────
+// 12. COMBOS & COMBO_ITEMS – Gói Combo cố định
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const combos = pgTable('combos', {
+  id: serial('id').primaryKey(),
+  tenantId: integer('tenant_id').references(() => tenants.id, { onDelete: 'cascade' }).notNull(),
+  name: varchar('name', { length: 255 }).notNull(),
+  code: varchar('code', { length: 50 }),
+  description: text('description'),
+  comboPrice: decimal('combo_price', { precision: 12, scale: 2 }).default('0').notNull(),
+  isActive: boolean('is_active').default(true).notNull(),
+  priority: integer('priority').default(0),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+}, (table) => [
+  index('idx_combos_tenant').on(table.tenantId),
+]);
+
+export const comboItems = pgTable('combo_items', {
+  id: serial('id').primaryKey(),
+  comboId: integer('combo_id').references(() => combos.id, { onDelete: 'cascade' }).notNull(),
+  productVariantId: integer('product_variant_id').references(() => productVariants.id, { onDelete: 'cascade' }).notNull(),
+  quantity: integer('quantity').default(1).notNull(),
+}, (table) => [
+  index('idx_combo_items_combo').on(table.comboId),
+  index('idx_combo_items_variant').on(table.productVariantId),
+]);
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 13. COMBO_RULES & COMBO_RULE_ITEMS – Gói Combo linh hoạt chọn món
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const comboRules = pgTable('combo_rules', {
+  id: serial('id').primaryKey(),
+  tenantId: integer('tenant_id').references(() => tenants.id, { onDelete: 'cascade' }).notNull(),
+  name: varchar('name', { length: 255 }).notNull(),
+  code: varchar('code', { length: 50 }),
+  comboPrice: decimal('combo_price', { precision: 12, scale: 2 }).default('0').notNull(),
+  ruleType: varchar('rule_type', { length: 50 }).default('flexible').notNull(),
+  minItems: integer('min_items').default(2).notNull(),
+  isActive: boolean('is_active').default(true).notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+}, (table) => [
+  index('idx_combo_rules_tenant').on(table.tenantId),
+]);
+
+export const comboRuleItems = pgTable('combo_rule_items', {
+  id: serial('id').primaryKey(),
+  comboRuleId: integer('combo_rule_id').references(() => comboRules.id, { onDelete: 'cascade' }).notNull(),
+  productVariantId: integer('product_variant_id').references(() => productVariants.id, { onDelete: 'cascade' }),
+  categoryId: integer('category_id').references(() => productCategories.id, { onDelete: 'cascade' }),
+}, (table) => [
+  index('idx_combo_rule_items_rule').on(table.comboRuleId),
+]);
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 14. PROMOTIONS & PROMOTION_STORES – Chương trình khuyến mãi tự động
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const promotions = pgTable('promotions', {
+  id: serial('id').primaryKey(),
+  tenantId: integer('tenant_id').references(() => tenants.id, { onDelete: 'cascade' }).notNull(),
+  code: varchar('code', { length: 50 }).notNull(),
+  name: varchar('name', { length: 255 }).notNull(),
+  description: text('description'),
+  promotionType: varchar('promotion_type', { length: 50 }).default('order_percent').notNull(), // 'order_percent' | 'order_fixed' | 'item_fixed' | 'gift'
+  discountPercent: decimal('discount_percent', { precision: 5, scale: 2 }),
+  discountAmount: decimal('discount_amount', { precision: 12, scale: 2 }),
+  maxDiscountAmount: decimal('max_discount_amount', { precision: 12, scale: 2 }),
+  minOrderAmount: decimal('min_order_amount', { precision: 12, scale: 2 }).default('0').notNull(),
+  allowWithVoucher: boolean('allow_with_voucher').default(false).notNull(),
+  requiresGiftSelection: boolean('requires_gift_selection').default(false).notNull(),
+  isAllStores: boolean('is_all_stores').default(true).notNull(),
+  isActive: boolean('is_active').default(true).notNull(),
+  startAt: timestamp('start_at', { withTimezone: true }).defaultNow().notNull(),
+  endAt: timestamp('end_at', { withTimezone: true }),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+}, (table) => [
+  index('idx_promotions_tenant').on(table.tenantId),
+  index('idx_promotions_code').on(table.code),
+]);
+
+export const promotionStores = pgTable('promotion_stores', {
+  id: serial('id').primaryKey(),
+  promotionId: integer('promotion_id').references(() => promotions.id, { onDelete: 'cascade' }).notNull(),
+  storeId: integer('store_id').references(() => stores.id, { onDelete: 'cascade' }).notNull(),
+}, (table) => [
+  index('idx_promo_stores_promo').on(table.promotionId),
+  index('idx_promo_stores_store').on(table.storeId),
+]);
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 15. VOUCHERS – Mã ưu đãi / Phiếu quà tặng
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const vouchers = pgTable('vouchers', {
+  id: serial('id').primaryKey(),
+  tenantId: integer('tenant_id').references(() => tenants.id, { onDelete: 'cascade' }).notNull(),
+  code: varchar('code', { length: 50 }).notNull(),
+  name: varchar('name', { length: 255 }).notNull(),
+  benefitType: varchar('benefit_type', { length: 50 }).default('discount').notNull(), // 'discount' | 'gift'
+  rewardType: varchar('reward_type', { length: 50 }).default('fixed').notNull(),       // 'fixed' | 'percent'
+  discountPercent: decimal('discount_percent', { precision: 5, scale: 2 }),
+  discountAmount: decimal('discount_amount', { precision: 12, scale: 2 }),
+  maxDiscountAmount: decimal('max_discount_amount', { precision: 12, scale: 2 }),
+  minOrderAmount: decimal('min_order_amount', { precision: 12, scale: 2 }).default('0').notNull(),
+  allowWithPromotion: boolean('allow_with_promotion').default(false).notNull(),
+  status: varchar('status', { length: 50 }).default('active').notNull(), // 'active' | 'used' | 'expired'
+  customerId: integer('customer_id').references(() => users.id, { onDelete: 'set null' }),
+  usedOrderId: integer('used_order_id').references(() => orders.id, { onDelete: 'set null' }),
+  validFrom: timestamp('valid_from', { withTimezone: true }).defaultNow().notNull(),
+  validTo: timestamp('valid_to', { withTimezone: true }),
+  usedAt: timestamp('used_at', { withTimezone: true }),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+}, (table) => [
+  index('idx_vouchers_tenant').on(table.tenantId),
+  index('idx_vouchers_code').on(table.code),
+  index('idx_vouchers_status').on(table.status),
+]);
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 16. CUSTOMERS – Khách hàng thân thiết / Hội viên
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const customers = pgTable('customers', {
+  id: serial('id').primaryKey(),
+  tenantId: integer('tenant_id').references(() => tenants.id, { onDelete: 'cascade' }).notNull(),
+  userId: integer('user_id').references(() => users.id, { onDelete: 'set null' }),
+  fullName: varchar('full_name', { length: 255 }).notNull(),
+  phone: varchar('phone', { length: 50 }).notNull(),
+  email: varchar('email', { length: 255 }),
+  points: integer('points').default(0).notNull(),
+  level: varchar('level', { length: 50 }).default('bronze').notNull(), // 'bronze' | 'silver' | 'gold' | 'diamond'
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+}, (table) => [
+  index('idx_customers_tenant').on(table.tenantId),
+  index('idx_customers_phone').on(table.phone),
+]);
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 17. ORDER_DISCOUNT_APPLICATIONS – Lịch sử áp dụng giảm giá trên hóa đơn
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const orderDiscountApplications = pgTable('order_discount_applications', {
+  id: serial('id').primaryKey(),
+  orderId: integer('order_id').references(() => orders.id, { onDelete: 'cascade' }).notNull(),
+  sourceType: varchar('source_type', { length: 50 }).notNull(), // 'PROMOTION' | 'VOUCHER' | 'MANUAL'
+  sourceId: integer('source_id'),
+  sourceCode: varchar('source_code', { length: 100 }),
+  sourceName: varchar('source_name', { length: 255 }),
+  discountType: varchar('discount_type', { length: 50 }),
+  discountValue: decimal('discount_value', { precision: 12, scale: 2 }),
+  discountPercent: decimal('discount_percent', { precision: 5, scale: 2 }),
+  discountAmountApplied: decimal('discount_amount_applied', { precision: 12, scale: 2 }).default('0').notNull(),
+  meta: jsonb('meta'),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+}, (table) => [
+  index('idx_order_discounts_order').on(table.orderId),
+]);
+
+// ─────────────────────────────────────────────────────────────────────────────
 // RELATIONS – Khai báo quan hệ cho Drizzle Query API
 // ─────────────────────────────────────────────────────────────────────────────
 
 export const tenantsRelations = relations(tenants, ({ many }) => ({
   stores: many(stores),
   users: many(users),
+  storeJoinRequests: many(storeJoinRequests),
   productCategories: many(productCategories),
   products: many(products),
   productToppings: many(productToppings),
+  ingredients: many(ingredients),
+  productRecipes: many(productRecipes),
+  semiFinishedRecipes: many(semiFinishedRecipes),
   orders: many(orders),
   shiftSessions: many(shiftSessions),
 }));
@@ -310,6 +623,7 @@ export const tenantsRelations = relations(tenants, ({ many }) => ({
 export const storesRelations = relations(stores, ({ one, many }) => ({
   tenant: one(tenants, { fields: [stores.tenantId], references: [tenants.id] }),
   users: many(users),
+  storeJoinRequests: many(storeJoinRequests),
   orders: many(orders),
   shiftSessions: many(shiftSessions),
 }));
@@ -317,28 +631,62 @@ export const storesRelations = relations(stores, ({ one, many }) => ({
 export const usersRelations = relations(users, ({ one, many }) => ({
   tenant: one(tenants, { fields: [users.tenantId], references: [tenants.id] }),
   store: one(stores, { fields: [users.storeId], references: [stores.id] }),
+  storeJoinRequests: many(storeJoinRequests),
   cashierOrders: many(orders),
   shiftSessions: many(shiftSessions),
 }));
 
+export const storeJoinRequestsRelations = relations(storeJoinRequests, ({ one }) => ({
+  tenant: one(tenants, { fields: [storeJoinRequests.tenantId], references: [tenants.id] }),
+  store: one(stores, { fields: [storeJoinRequests.storeId], references: [stores.id] }),
+  user: one(users, { fields: [storeJoinRequests.userId], references: [users.id] }),
+  approver: one(users, { fields: [storeJoinRequests.approvedBy], references: [users.id] }),
+}));
+
 export const productCategoriesRelations = relations(productCategories, ({ one, many }) => ({
   tenant: one(tenants, { fields: [productCategories.tenantId], references: [tenants.id] }),
+  parent: one(productCategories, { fields: [productCategories.parentId], references: [productCategories.id], relationName: 'categoryHierarchy' }),
+  children: many(productCategories, { relationName: 'categoryHierarchy' }),
   products: many(products),
+  ingredients: many(ingredients),
 }));
 
 export const productsRelations = relations(products, ({ one, many }) => ({
   tenant: one(tenants, { fields: [products.tenantId], references: [tenants.id] }),
   category: one(productCategories, { fields: [products.categoryId], references: [productCategories.id] }),
   variants: many(productVariants),
+  recipes: many(productRecipes),
   orderItems: many(orderItems),
 }));
 
-export const productVariantsRelations = relations(productVariants, ({ one }) => ({
+export const productVariantsRelations = relations(productVariants, ({ one, many }) => ({
   product: one(products, { fields: [productVariants.productId], references: [products.id] }),
+  recipes: many(productRecipes),
 }));
 
 export const productToppingsRelations = relations(productToppings, ({ one }) => ({
   tenant: one(tenants, { fields: [productToppings.tenantId], references: [tenants.id] }),
+}));
+
+export const ingredientsRelations = relations(ingredients, ({ one, many }) => ({
+  tenant: one(tenants, { fields: [ingredients.tenantId], references: [tenants.id] }),
+  category: one(productCategories, { fields: [ingredients.categoryId], references: [productCategories.id] }),
+  recipes: many(productRecipes),
+  subRecipes: many(semiFinishedRecipes, { relationName: 'semiFinishedToRecipes' }),
+  usedInSubRecipes: many(semiFinishedRecipes, { relationName: 'ingredientToRecipes' }),
+}));
+
+export const semiFinishedRecipesRelations = relations(semiFinishedRecipes, ({ one }) => ({
+  tenant: one(tenants, { fields: [semiFinishedRecipes.tenantId], references: [tenants.id] }),
+  semiFinished: one(ingredients, { fields: [semiFinishedRecipes.semiFinishedId], references: [ingredients.id], relationName: 'semiFinishedToRecipes' }),
+  ingredient: one(ingredients, { fields: [semiFinishedRecipes.ingredientId], references: [ingredients.id], relationName: 'ingredientToRecipes' }),
+}));
+
+export const productRecipesRelations = relations(productRecipes, ({ one }) => ({
+  tenant: one(tenants, { fields: [productRecipes.tenantId], references: [tenants.id] }),
+  product: one(products, { fields: [productRecipes.productId], references: [products.id] }),
+  variant: one(productVariants, { fields: [productRecipes.variantId], references: [productVariants.id] }),
+  ingredient: one(ingredients, { fields: [productRecipes.ingredientId], references: [ingredients.id] }),
 }));
 
 export const ordersRelations = relations(orders, ({ one, many }) => ({
@@ -364,3 +712,50 @@ export const shiftSessionsRelations = relations(shiftSessions, ({ one }) => ({
   store: one(stores, { fields: [shiftSessions.storeId], references: [stores.id] }),
   user: one(users, { fields: [shiftSessions.userId], references: [users.id] }),
 }));
+
+export const combosRelations = relations(combos, ({ one, many }) => ({
+  tenant: one(tenants, { fields: [combos.tenantId], references: [tenants.id] }),
+  items: many(comboItems),
+}));
+
+export const comboItemsRelations = relations(comboItems, ({ one }) => ({
+  combo: one(combos, { fields: [comboItems.comboId], references: [combos.id] }),
+  variant: one(productVariants, { fields: [comboItems.productVariantId], references: [productVariants.id] }),
+}));
+
+export const comboRulesRelations = relations(comboRules, ({ one, many }) => ({
+  tenant: one(tenants, { fields: [comboRules.tenantId], references: [tenants.id] }),
+  ruleItems: many(comboRuleItems),
+}));
+
+export const comboRuleItemsRelations = relations(comboRuleItems, ({ one }) => ({
+  comboRule: one(comboRules, { fields: [comboRuleItems.comboRuleId], references: [comboRules.id] }),
+  variant: one(productVariants, { fields: [comboRuleItems.productVariantId], references: [productVariants.id] }),
+  category: one(productCategories, { fields: [comboRuleItems.categoryId], references: [productCategories.id] }),
+}));
+
+export const promotionsRelations = relations(promotions, ({ one, many }) => ({
+  tenant: one(tenants, { fields: [promotions.tenantId], references: [tenants.id] }),
+  stores: many(promotionStores),
+}));
+
+export const promotionStoresRelations = relations(promotionStores, ({ one }) => ({
+  promotion: one(promotions, { fields: [promotionStores.promotionId], references: [promotions.id] }),
+  store: one(stores, { fields: [promotionStores.storeId], references: [stores.id] }),
+}));
+
+export const vouchersRelations = relations(vouchers, ({ one }) => ({
+  tenant: one(tenants, { fields: [vouchers.tenantId], references: [tenants.id] }),
+  customer: one(users, { fields: [vouchers.customerId], references: [users.id] }),
+  usedOrder: one(orders, { fields: [vouchers.usedOrderId], references: [orders.id] }),
+}));
+
+export const customersRelations = relations(customers, ({ one }) => ({
+  tenant: one(tenants, { fields: [customers.tenantId], references: [tenants.id] }),
+  user: one(users, { fields: [customers.userId], references: [users.id] }),
+}));
+
+export const orderDiscountApplicationsRelations = relations(orderDiscountApplications, ({ one }) => ({
+  order: one(orders, { fields: [orderDiscountApplications.orderId], references: [orders.id] }),
+}));
+

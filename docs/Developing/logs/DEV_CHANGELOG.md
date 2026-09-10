@@ -408,8 +408,486 @@
   - `POST /api/auth/register-owner` cho email cũ + sai mật khẩu: Báo lỗi thân thiện (HTTP 400).
   - `npm run build` frontend pass 100% (21.98s, 0 lỗi TypeScript).
 
+---
 
+### [LOG-025] | 09/09/2026 - TÁI TỔ CHỨC MENU HUB THÀNH 3 TRANG RIÊNG BIỆT (MÓN BÁN, NGUYÊN LIỆU THÔ, BÁN THÀNH PHẨM), TÍCH HỢP ĐỊNH LƯỢNG BOM & SUB-BOM, DANH MỤC PHÂN CẤP CHA-CON VÀ DUAL VIEW MODES (CARD GRID VS TABLE ROW)
+* **Người thực hiện**: Antigravity AI Agent (theo chỉ đạo và review mới của Chủ quán).
+* **Tuân thủ**:
+  - `AI_RULES.md`: Quy tắc Icon tối giản, Bảng màu chuẩn KONEKT (`#3D503C`, `#F8F6F1`, `#FFFFFF`, `#E8E3DA`), Font `Be Vietnam Pro`, Quy tắc ghi nhật ký phát triển, Skills protocol (`minimalist-ui`, `design-taste-frontend`, `full-output-enforcement`).
+  - `REQ-07` & `PLAN-07`: 4 trụ cột tái cấu trúc Menu Hub.
+* **Chi tiết Triển khai**:
+  1. **Tái cấu trúc Database & Migration**:
+     - `product_categories`: Thêm trường `parent_id` (tự tham chiếu phân cấp danh mục cha - con), `scope` (`product` | `raw_material` | `semi_finished`) cùng index hiệu năng.
+     - `ingredients`: Thêm trường `category_id` (liên kết danh mục theo scope), `item_type` (`raw` | `semi_finished`), `batch_yield` (sản lượng mẻ sơ chế) cùng index.
+     - `semi_finished_recipes`: Tạo bảng mới lưu cấu trúc Sub-BOM (Bán thành phẩm cấu thành từ nhiều nguyên vật liệu thô với định lượng và tỷ lệ hao hụt).
+     - Chạy migration tự động phân loại dữ liệu BTP sẵn có thành công trên Supabase DB qua `migrate_plan07.ts`.
+  2. **Backend Services & API Endpoints**:
+     - Cập nhật `ownerMenu.service.ts`, `ownerMenu.controller.ts`, `ownerMenu.routes.ts`.
+     - `listCategories`: Hỗ trợ lọc theo `scope` và trả về cây danh mục cha - con (`subCategories`).
+     - `listIngredients`: Hỗ trợ lọc theo `itemType` (`raw` vs `semi_finished`) và `categoryId`.
+     - `saveSemiFinishedRecipe`: Lưu Sub-BOM, kiểm tra chống vòng lặp đệ quy (anti-recursion), tự động tính toán lại và cập nhật giá vốn `ingredients.cost_per_unit = totalBatchCost / batchYield`.
+     - `listProducts`: Trả về thông tin phân cấp danh mục cha/con và công thức BOM tích hợp sẵn trong danh sách.
+  3. **Tái cấu trúc Menu Hub thành 3 Tab chuyên biệt**:
+     - `OwnerMenuHubPage.tsx`: Chuyển đổi thanh Segmented Tab Bar thành 3 tabs:
+       - **Sản phẩm / Món bán** (`tab=products`): Tích hợp Món bán + Công thức định lượng BOM đa size + Danh mục món cha/con.
+       - **Nguyên liệu thô** (`tab=raw-materials`): Chuyên biệt quản lý NVL thô nhập kho + Danh mục NVL cha/con.
+       - **Bán thành phẩm** (`tab=semi-finished`): Chuyên biệt quản lý BTP sơ chế + Modal Sub-BOM tính giá vốn tự động + Danh mục BTP cha/con.
+       - Cơ chế fallback thông minh cho URL params cũ (`ingredients` ➔ `raw-materials`, `recipes`/`categories` ➔ `products`).
+  4. **Hỗ trợ 2 Chế độ hiển thị linh hoạt (Dual View Modes)**:
+     - **Mode 1: Dạng Thẻ (Card / Bento Grid)**: Thích hợp cho laptop/desktop. Khi bấm vào thẻ hoặc icon xem, mở ngay **ProductDetailModal** hiển thị popup chi tiết: thông tin món, kích cỡ, bảng công thức BOM, biên lợi nhuận margin.
+     - **Mode 2: Dạng Bảng Dòng (Table Row)**: Bảng dữ liệu dòng phẳng, căn phải `tabular-nums` cho toàn bộ cột tài chính (Giá cơ bản, Giá vốn COGS, Margin %).
+     - Tự động ghi nhớ chế độ hiển thị ưa thích vào `localStorage`.
+  5. **Tối giản Nhãn trạng thái & Icon**:
+     - Loại bỏ icon màu mè rác ở nhãn trạng thái; dùng text badge phẳng tinh tế (`Đang bán` / `Tạm ngưng`).
+     - Tích hợp Modal Quản lý danh mục cha - con trực tiếp trên từng trang (`CategoryManageModal`).
+* **Files tác động**:
+  - `[CHỈNH SỬA]` `backend/src/db/schema.ts`
+  - `[TẠO MỚI]` `backend/src/scripts/migrate_plan07.ts`
+  - `[CHỈNH SỬA]` `backend/src/modules/owner-menu/ownerMenu.types.ts`
+  - `[CHỈNH SỬA]` `backend/src/modules/owner-menu/ownerMenu.service.ts`
+  - `[CHỈNH SỬA]` `backend/src/modules/owner-menu/ownerMenu.controller.ts`
+  - `[CHỈNH SỬA]` `backend/src/modules/owner-menu/ownerMenu.routes.ts`
+  - `[CHỈNH SỬA]` `frontend/src/features/owner-menu/api/ownerMenu.api.ts`
+  - `[TẠO MỚI]` `frontend/src/features/owner-menu/components/CategoryManageModal.tsx`
+  - `[TẠO MỚI]` `frontend/src/features/owner-menu/components/ProductDetailModal.tsx`
+  - `[TẠO MỚI]` `frontend/src/features/owner-menu/components/SemiFinishedRecipeModal.tsx`
+  - `[CHỈNH SỬA]` `frontend/src/features/owner-menu/pages/OwnerProductsPage.tsx`
+  - `[TẠO MỚI]` `frontend/src/features/owner-menu/pages/OwnerRawMaterialsPage.tsx`
+  - `[TẠO MỚI]` `frontend/src/features/owner-menu/pages/OwnerSemiFinishedPage.tsx`
+  - `[CHỈNH SỬA]` `frontend/src/features/owner-menu/pages/OwnerMenuHubPage.tsx`
+  - `[TẠO MỚI]` `docs/Requirements/REQ-07_CONSOLIDATED_MENU_PAGES_AND_DUAL_VIEW_MODES.md`
+  - `[TẠO MỚI]` `docs/Developing/plans/PLAN-07_CONSOLIDATED_MENU_PAGES_AND_DUAL_VIEW_MODES.md`
+  - `[CHỈNH SỬA]` `docs/Developing/logs/DEV_CHANGELOG.md`
+* **Kết quả Kiểm thử**:
+  - `backend`: `npx tsc --noEmit` hoàn thành với **Exit code 0** (0 lỗi TypeScript).
+  - `frontend`: `npx tsc --noEmit` hoàn thành với **Exit code 0** (0 lỗi TypeScript).
+  - Trực quan Browser: Kiểm tra thành công hiển thị dạng Card Grid, Table View với số liệu tài chính `tabular-nums` canh phải, Popup chi tiết món `ProductDetailModal` hiển thị đầy đủ size và thành phần BOM định lượng.
 
+---
 
+### [LOG-026] | 09/09/2026 - TINH GỌN THẺ SẢN PHẨM & BẢNG DỮ LIỆU: BỔ SUNG HÌNH ẢNH MÓN, ẨN KÍCH CỠ & TÍNH TOÁN HIỂN THỊ % GIÁ VỐN (% COST)
+* **Người thực hiện**: Antigravity AI Agent (theo review và chỉ đạo trực tiếp từ Chủ quán).
+* **Tuân thủ**:
+  - `AI_RULES.md`: Quy tắc Icon nội bộ, Bảng màu chuẩn KONEKT (`#3D503C`, `#F8F6F1`, `#FFFFFF`, `#E8E3DA`), Font `Be Vietnam Pro`, Quy tắc ghi nhật ký phát triển, Skills-first protocol (`minimalist-ui`, `design-taste-frontend`, `full-output-enforcement`).
+  - `REQ-08` & `PLAN-08`: Yêu cầu tinh gọn mặt ngoài thẻ, đưa kích cỡ và số tiền cost thô vào popup chi tiết, hiển thị ảnh món và % giá vốn.
+* **Chi tiết Triển khai**:
+  1. **Cập nhật CSDL Ảnh Ẩm Thực Mẫu**:
+     - Tạo và thực thi script `backend/src/scripts/update_product_images.ts`: Cập nhật bộ ảnh đồ uống chuyên nghiệp (Unsplash F&B) cho toàn bộ 16 sản phẩm hiện có (Bạc sỉu, Cà phê sữa đá, Americano, Latte, Cappuccino, Trà đào cam sả, Trà sữa trân châu, Trà vải, Nước ép cam, Sinh tố bơ,...).
+  2. **Tinh gọn Thẻ Sản phẩm (Bento Card Grid)**:
+     - Thêm ảnh món trực quan ở phần trên của thẻ ($145\text{px}$, `object-fit: cover`, bo tròn 2 góc trên) kèm ảnh fallback an toàn.
+     - Đặt badge trạng thái (`Đang bán` / `Tạm ngưng`) nổi tinh tế ở góc trên bên phải ảnh với hiệu ứng kính mờ (`backdrop-filter`).
+     - **Bỏ hoàn toàn danh sách size (Size S/M/L)** ở mặt ngoài thẻ.
+     - **Bỏ số tiền cost và biên lợi nhuận thô** ở mặt ngoài thẻ.
+     - **Tính toán và hiển thị % Giá vốn (% Cost)**:
+       $$\text{Cost \%} = \frac{\text{Giá vốn BOM}}{\text{Giá bán cơ bản}} \times 100$$
+       Hiển thị trực tiếp dạng badge màu chuẩn F&B: xanh rêu $\le 30\%$, vàng cam $31\%-35\%$, đỏ gạch $> 35\%$.
+     - Mặt ngoài thẻ tinh gọn tuyệt đối: Ảnh, Tên món, Danh mục, Giá bán cơ bản, % Giá vốn, Trạng thái, và cụm nút thao tác (Sửa, Xóa, Xem chi tiết).
+  3. **Đồng bộ Chế độ Bảng Dòng (Table Row View)**:
+     - Thêm thumbnail ảnh $44 \times 44\text{px}$ bo góc $8\text{px}$ đi kèm Tên món & Danh mục.
+     - Bỏ cột kích cỡ và bỏ 2 cột số tiền giá vốn + margin thô.
+     - Bổ sung cột **% Giá vốn (% Cost)** canh phải `tabular-nums`.
+  4. **Nâng cấp Popup Chi tiết Món (`ProductDetailModal.tsx`)**:
+     - Bổ sung ảnh đại diện lớn kèm mô tả chi tiết món ăn ở phần đầu modal.
+     - Bố trí lưới 4 chỉ số tài chính: Giá cơ bản, Giá vốn BOM (VNĐ), % Giá vốn (% Cost), Biên lợi nhuận (Margin %).
+     - Giữ nguyên khối chi tiết Kích cỡ & Giá bán từng size và Bảng định lượng nguyên liệu chi tiết (BOM).
+* **Files tác động**:
+  - `[TẠO MỚI]` `backend/src/scripts/update_product_images.ts`
+  - `[CHỈNH SỬA]` `frontend/src/features/owner-menu/pages/OwnerProductsPage.tsx`
+  - `[CHỈNH SỬA]` `frontend/src/features/owner-menu/components/ProductDetailModal.tsx`
+  - `[TẠO MỚI]` `docs/Requirements/REQ-08_STREAMLINED_PRODUCT_CARD_WITH_IMAGE_AND_COST_PERCENT.md`
+  - `[TẠO MỚI]` `docs/Developing/plans/PLAN-08_STREAMLINED_PRODUCT_CARD_WITH_IMAGE_AND_COST_PERCENT.md`
+  - `[CHỈNH SỬA]` `docs/Developing/logs/DEV_CHANGELOG.md`
+
+---
+
+### [LOG-027] | 09/09/2026 - TÁI CẤU TRÚC SECTION DANH MỤC, TINH GỌN THẺ MÓN VÀ TÍCH HỢP POPUP MA TRẬN KÍCH CỠ - ĐỊNH LƯỢNG (ẢNH 2)
+* **Người thực hiện**: Antigravity AI Agent (theo review và bản phác thảo tay Ảnh 2 của Chủ quán).
+* **Tuân thủ**:
+  - `AI_RULES.md`: Bảng màu chuẩn KONEKT (`#3D503C`, `#2D3E2F`, `#F8F6F1`, `#FFFFFF`, `#E8E3DA`), Font chữ `Be Vietnam Pro`, Quy tắc Icon nội bộ, Quy tắc ghi log tác vụ, Skills-first protocol (`minimalist-ui`, `design-taste-frontend`, `full-output-enforcement`).
+  - `REQ-09` & `PLAN-09`: Yêu cầu bỏ tag danh mục khỏi thẻ, chia session theo danh mục, bỏ cụm nút thao tác ở mặt ngoài (click thẳng vào thẻ hoặc dòng bảng để vừa xem vừa sửa), bỏ từ ngữ kỹ thuật "BOM" $\rightarrow$ "Vốn %", hợp nhất quản lý kích cỡ và công thức định lượng thành bảng ma trận trực quan tích hợp giá bán (Ảnh 2).
+* **Chi tiết Triển khai**:
+  1. **Tổ chức Trang Món Bán theo Section Danh mục (`OwnerProductsPage.tsx`)**:
+     - Tự động gom nhóm sản phẩm theo `Category Sections` (Tiêu đề phân nhóm: `Tên danh mục (X món)`).
+     - Thẻ sản phẩm tối giản tuyệt đối: Chiều cao ảnh $115\text{px}$, gỡ bỏ hoàn toàn badge danh mục lặp lại, gỡ bỏ toàn bộ các nút bấm thao tác rác ở mặt ngoài (mắt xem, bút sửa, thùng rác).
+     - Click trực tiếp vào bất kỳ vị trí nào trên thẻ $\rightarrow$ Mở thẳng Popup Vừa Xem Vừa Sửa (All-in-One).
+     - Xóa sạch từ viết tắt kỹ thuật "BOM", thay bằng nhãn thuần Việt tinh tế: `28% Vốn` hoặc `Chưa định lượng`.
+     - Chế độ Table View tương thích: Dòng bảng tối giản gồm Ảnh + Tên món, Giá bán cơ bản, % Vốn, Trạng thái. Click bất kỳ dòng nào mở ngay modal edit.
+  2. **Đại tu Popup Vừa Xem Vừa Sửa & Ma trận Tích hợp (`ProductFormModal.tsx`)**:
+     - Hợp nhất 100% Thông tin cơ bản, Kích cỡ, Giá bán và Bảng định lượng nguyên vật liệu trên cùng một màn hình (không phân tab rời rạc).
+     - **Chế độ Món 1 Size / Tiêu chuẩn**:
+       * 1 ô nhập Giá bán to rõ.
+       * Bảng định lượng 1 cột số lượng đơn giản + Đơn vị tính + Nút xóa.
+       * Dòng tự động tính: `Giá vốn: X đ • Tỷ lệ vốn: Y% Vốn`.
+     - **Chế độ Món Nhiều Kích cỡ (Ma trận tích hợp theo đúng bản vẽ tay Ảnh 2)**:
+       * Hàng Header cột Size: Nhập tên size (Size S, M, L...) + **Nhập Giá bán thực tế trực tiếp dưới từng size** + Nút ⭐ chọn size mặc định + Nút ✕ xóa size.
+       * Nút `+ Thêm Size` linh hoạt mở rộng cột kích cỡ.
+       * Các hàng Nguyên liệu: Chọn NVL + Input số lượng định lượng tương ứng từng size + Đơn vị tính + Nút 🗑️ xóa.
+       * Nút `+ Thêm nguyên liệu` thêm hàng mới tức thì.
+       * Hàng Footer Ma trận: Tự động tính Giá vốn (VNĐ) và Tỷ lệ % Vốn (`% Vốn`) cho từng size theo thời gian thực dựa trên giá bán và định lượng tương ứng.
+     - **Chân Modal Chuẩn Tối Giản**:
+       * Đúng 2 nút bấm thao tác chính: **"Xóa món"** (nút đỏ bên trái) và **"Lưu thay đổi"** (nút xanh rêu KONEKT bên phải).
+  3. **Dọn dẹp Tài nguyên Thừa**:
+     - Xóa bỏ hoàn toàn modal view tĩnh `ProductDetailModal.tsx` không còn sử dụng.
+* **Files tác động**:
+  - `[CHỈNH SỬA]` `frontend/src/features/owner-menu/pages/OwnerProductsPage.tsx`
+  - `[CHỈNH SỬA]` `frontend/src/features/owner-menu/components/ProductFormModal.tsx`
+  - `[XÓA]` `frontend/src/features/owner-menu/components/ProductDetailModal.tsx`
+  - `[TẠO MỚI]` `docs/Requirements/REQ-09_UNIFIED_MATRIX_EDIT_AND_CATEGORY_SESSIONS.md`
+  - `[TẠO MỚI]` `docs/Developing/plans/PLAN-09_UNIFIED_MATRIX_EDIT_AND_CATEGORY_SESSIONS.md`
+  - `[CHỈNH SỬA]` `docs/Developing/logs/DEV_CHANGELOG.md`
+* **Kết quả Kiểm thử**:
+  - `backend`: `npx tsc --noEmit` hoàn thành với **Exit code 0** (0 lỗi TypeScript).
+  - `frontend`: `npx tsc --noEmit` hoàn thành với **Exit code 0** (0 lỗi TypeScript).
+
+---
+
+### [LOG-028] | 09/09/2026 - NÂNG CẤP POPUP MA TRẬN: MỞ RỘNG MODAL (1040PX), NHÚNG ĐƠN VỊ INLINE, BỎ NÚT SAO VÀ XÂY DỰNG POPUP CHỌN NGUYÊN LIỆU MULTI-SELECT
+* **Người thực hiện**: Antigravity AI Agent (theo chỉ đạo trực tiếp từ Chủ quán).
+* **Tuân thủ**:
+  - `AI_RULES.md`: Bảng màu chuẩn KONEKT (`#3D503C`, `#2D3E2F`, `#F8F6F1`, `#FFFFFF`, `#E8E3DA`), Font `Be Vietnam Pro`, Quy tắc Icon nội bộ, Quy tắc ghi nhật ký phát triển, Skills-first protocol (`minimalist-ui`, `design-taste-frontend`, `full-output-enforcement`).
+  - `REQ-10` & `PLAN-10`: Yêu cầu mở rộng modal, nhúng đơn vị vào sau số lượng, bỏ nút sao ⭐, thay dropdown chọn nguyên liệu bằng popup picker đa chọn.
+* **Chi tiết Triển khai**:
+  1. **Mở rộng Kích thước Modal (`ProductFormModal.tsx`)**:
+     - Nâng `maxWidth` từ 780px lên `1040px` (`width: "95vw"`). Bảng ma trận các kích cỡ hiển thị rộng rãi, không bị dính thanh cuộn ngang gây gò bó trên laptop.
+  2. **Nhúng Đơn vị tính vào sau Số lượng (Inline Unit Suffix)**:
+     - Gỡ bỏ hoàn toàn cột "Đơn vị" riêng biệt ở cuối bảng.
+     - Đơn vị tính (`g`, `ml`, `quả`...) được đặt trực tiếp ngay sau con số nhập liệu của từng size: `[ 25 ] g`, `[ 40 ] ml`.
+  3. **Header Cột Size Tinh giản**:
+     - Bỏ hoàn toàn icon sao ⭐ (size mặc định) gây rối mắt.
+     - Header mỗi size chỉ gồm: Tên size (`Size S`, `Size M`...) + Ô nhập Giá bán thực tế trực tiếp dưới tên size + Nút ✕ xóa size ở góc khi có nhiều size.
+  4. **Xây dựng Popup Chọn Nguyên liệu & Bán thành phẩm (`IngredientPickerModal.tsx`)**:
+     - Xóa bỏ dropdown `<select>` ở cột nguyên liệu trong bảng ma trận. Thay vào đó, hàng nguyên liệu hiển thị tên tĩnh in đậm, badge phân loại (`Nguyên liệu thô` / `Bán thành phẩm`) và đơn giá vốn tham khảo.
+     - Khi bấm nút `+ Thêm nguyên liệu`, mở popup `IngredientPickerModal`:
+       * Thanh tìm kiếm tức thời theo tên hoặc mã.
+       * Bộ lọc Tab: `Tất cả`, `Nguyên liệu thô`, `Bán thành phẩm`.
+       * Hỗ trợ chọn nhanh: "Chọn tất cả hiển thị", "Bỏ chọn".
+       * Danh sách với Checkbox multi-select, hiển thị tên, đơn vị, giá vốn, tồn kho hiện tại.
+       * Đánh dấu mờ và vô hiệu hóa các nguyên liệu đã có sẵn trong công thức để tránh thêm trùng lặp.
+       * Bấm "Thêm vào công thức (X)" $\rightarrow$ Tự động sinh ra đúng X hàng mới trong bảng ma trận.
+  5. **Đồng bộ Món 1 Size & Nhiều Size**: Cả 2 chế độ đều dùng chung cơ chế Picker và đơn vị inline đồng nhất.
+* **Files tác động**:
+  - `[TẠO MỚI]` `frontend/src/features/owner-menu/components/IngredientPickerModal.tsx`
+  - `[CHỈNH SỬA]` `frontend/src/features/owner-menu/components/ProductFormModal.tsx`
+  - `[TẠO MỚI]` `docs/Requirements/REQ-10_ENHANCED_MATRIX_MODAL_AND_INGREDIENT_PICKER.md`
+  - `[TẠO MỚI]` `docs/Developing/plans/PLAN-10_ENHANCED_MATRIX_MODAL_AND_INGREDIENT_PICKER.md`
+  - `[CHỈNH SỬA]` `docs/Developing/logs/DEV_CHANGELOG.md`
+* **Kết quả Kiểm thử**:
+  - `backend`: `npx tsc --noEmit` hoàn thành với **Exit code 0** (0 lỗi).
+  - `frontend`: `npx tsc --noEmit` hoàn thành với **Exit code 0** (0 lỗi).
+  - Trực quan Browser: Modal hiển thị rộng rãi 1040px, size headers sạch sẽ không còn sao ⭐, đơn vị tính nhúng inline sau số lượng, bấm `+ Thêm nguyên liệu` mở popup picker multi-select mượt mà.
+
+---
+
+### [LOG-029] | 09/09/2026 - TINH CHỈNH POPUP MA TRẬN: MODAL CO GIÃN MỞ RỘNG, TỰ ĐỘNG XÓA SỐ 0 KHI NHẬP, GỠ BỎ GIÁ VỐN LẺ DƯỚI NGUYÊN LIỆU VÀ ĐỔI TOÀN BỘ DANH XƯNG "NGUYÊN LIỆU"
+* **Người thực hiện**: Antigravity AI Agent (theo chỉ đạo trực tiếp từ Chủ quán).
+* **Tuân thủ**:
+  - `AI_RULES.md`: Bảng màu chuẩn KONEKT (`#3D503C`, `#2D3E2F`, `#F8F6F1`, `#FFFFFF`, `#E8E3DA`), Font `Be Vietnam Pro`, Quy tắc Icon nội bộ, Quy tắc ghi nhật ký phát triển, Skills-first protocol (`minimalist-ui`, `design-taste-frontend`, `full-output-enforcement`).
+  - Phản hồi từ Chủ quán: Modal tự mở rộng khi tên dài, tên quá dài thì ba chấm `...` và giới hạn ký tự nhập, số lượng căn giữa, click vào ô số `0` tự xóa để gõ số mới, bỏ dòng phụ giá vốn lẻ dưới tên nguyên liệu, đổi triệt để từ "Nguyên liệu thô" thành "Nguyên liệu".
+* **Chi tiết Triển khai**:
+  1. **Tự động co giãn Modal & Giới hạn ký tự**:
+     - Cấu hình kích thước modal: `width: "fit-content"`, `minWidth: "min(1040px, 95vw)"`, `maxWidth: "min(1280px, 96vw)"`.
+     - Tên nguyên liệu hiển thị trên 1 dòng duy nhất (`whiteSpace: "nowrap"`, `overflow: "hidden"`, `textOverflow: "ellipsis"`), kèm `title` hiển thị tên đầy đủ khi hover.
+     - Thiết lập `maxLength`: Tên món (60 ký tự), Mô tả ngắn (120 ký tự), Tên size (20 ký tự).
+  2. **Căn giữa con số & Trải nghiệm nhập liệu tự xóa số 0**:
+     - Tất cả các ô nhập định lượng và giá bán căn giữa (`textAlign: "center"`), hiển thị `tabular-nums`.
+     - Chuyển đổi trạng thái `quantities` hỗ trợ `number | string` để xử lý chuỗi rỗng `""` lúc người dùng đang gõ.
+     - Sự kiện `onFocus`: Nếu giá trị là `"0"` hoặc `""`, tự động xóa trắng và bôi đen (`select()`), cho phép người dùng gõ ngay số mới mà không cần Backspace xóa số 0 cũ.
+     - Sự kiện `onBlur`: Nếu để trống thì tự động khôi phục về `0`.
+  3. **Lược bỏ dòng phụ giá vốn lẻ & Nhãn thừa dưới tên nguyên liệu**:
+     - Xóa bỏ hoàn toàn dòng phụ `[Nguyên liệu thô] 220 đ/g` bên dưới tên nguyên liệu trong bảng ma trận.
+     - Nếu là bán thành phẩm thì chỉ gắn tag nhỏ `BTP` tinh tế.
+     - Hàng Footer tự động tổng hợp Giá vốn và % Vốn theo thời gian thực cho từng size.
+  4. **Chuẩn hóa danh xưng thuần Việt trên toàn hệ thống**:
+     - Thay thế toàn bộ cụm từ "Nguyên liệu thô" thành "Nguyên liệu" trên tất cả các trang, tab, modal (Hub page, Raw materials page, Picker modal, Category manage modal, Semi-finished modal).
+* **Files tác động**:
+  - `[CHỈNH SỬA]` `frontend/src/features/owner-menu/components/ProductFormModal.tsx`
+  - `[CHỈNH SỬA]` `frontend/src/features/owner-menu/components/IngredientPickerModal.tsx`
+  - `[CHỈNH SỬA]` `frontend/src/features/owner-menu/pages/OwnerMenuHubPage.tsx`
+  - `[CHỈNH SỬA]` `frontend/src/features/owner-menu/pages/OwnerRawMaterialsPage.tsx`
+  - `[CHỈNH SỬA]` `frontend/src/features/owner-menu/components/OwnerIngredientsTab.tsx`
+  - `[CHỈNH SỬA]` `frontend/src/features/owner-menu/components/SemiFinishedRecipeModal.tsx`
+  - `[CHỈNH SỬA]` `frontend/src/features/owner-menu/components/CategoryManageModal.tsx`
+  - `[CHỈNH SỬA]` `docs/Developing/logs/DEV_CHANGELOG.md`
+* **Kết quả Kiểm thử**:
+  - `backend`: `npx tsc --noEmit` hoàn thành với **Exit code 0** (0 lỗi).
+  - `frontend`: `npx tsc --noEmit` hoàn thành với **Exit code 0** (0 lỗi).
+  - Trực quan Browser: Click vào ô số `0` tự xóa để gõ số mới, tên nguyên liệu 1 dòng không còn dòng phụ rườm rà, modal co giãn mở rộng đẹp mắt.
+
+---
+
+### [LOG-030] | 09/09/2026 - TÍCH HỢP MÁY TÍNH GIÁ VỐN BÌNH QUÂN GIA QUYỀN, BỘ CHỌN ĐƠN VỊ TÍNH CHI TIẾT F&B SEARCHABLE VÀ TẠO NHANH DANH MỤC TRỰC TIẾP
+* **Người thực hiện**: Antigravity AI Agent (theo chỉ đạo trực tiếp từ Chủ quán).
+* **Tuân thủ**:
+  - `AI_RULES.md`: Bảng màu chuẩn KONEKT (`#3D503C`, `#2D3E2F`, `#FAF8F5`, `#FFFFFF`, `#DFD9CE`), Font `Be Vietnam Pro`, Quy tắc Icon nội bộ (`lucide-react`), Quy tắc ghi nhật ký phát triển, Skills-first protocol (`minimalist-ui`, `design-taste-frontend`, `full-output-enforcement`).
+  - `REQ-11` & `PLAN-11`: Đáp ứng đầy đủ 3 yêu cầu cốt lõi của Chủ quán:
+    1. Giá vốn linh hoạt & Máy tính giá trị tồn kho trung bình / Quy đổi lô hàng đóng gói.
+    2. Đơn vị tính chi tiết F&B, phân nhóm, hỗ trợ tìm kiếm và đơn vị tùy chỉnh.
+    3. Tạo nhanh danh mục trực tiếp ngay trong form (Món bán & Nguyên liệu), tự động gán vào form mà không làm mất dữ liệu đang nhập.
+* **Chi tiết Triển khai**:
+  1. **Máy tính Giá vốn Thông minh (`CostCalculatorModal.tsx`)**:
+     - Nút "Máy tính" trang nhã ngay cạnh nhãn "Giá vốn (VNĐ/đơn vị) *" trong form Nguyên liệu.
+     - **Chế độ 1 - Quy đổi theo gói/bao mua về**: Nhập tổng tiền chi ra (VNĐ) + Số lượng quy đổi $\rightarrow$ Tự động tính giá vốn / đơn vị pha chế $\rightarrow$ Nút "Áp dụng giá này".
+     - **Chế độ 2 - Bình quân gia quyền tồn kho (Weighted Average Cost)**: Tính toán chính xác theo chuẩn kế toán kho F&B: $(\text{Tồn cũ} \times \text{Giá cũ} + \text{Tiền nhập mới}) / (\text{Tồn cũ} + \text{SL nhập mới}) \rightarrow$ Nút "Áp dụng giá bình quân".
+     - Tự động điền giá trị tính được vào ô Giá vốn, người dùng vẫn có thể gõ sửa trực tiếp con số bất cứ lúc nào.
+  2. **Bộ chọn Đơn vị tính F&B Searchable (`SearchableUnitSelect.tsx`)**:
+     - Cung cấp hơn 25+ đơn vị tính chuẩn ngành F&B phân nhóm khoa học:
+       * Khối lượng: `g`, `kg`, `mg`, `oz`.
+       * Thể tích: `ml`, `l`, `cl`.
+       * Đóng gói / Bao bì: `lon`, `hop`, `chai`, `goi`, `tui`, `bao`, `thung`, `binh`, `hu`, `cay`.
+       * Định lượng pha chế: `qua`, `lat`, `tep`, `la`, `vien`, `shot`, `pump`, `muong`, `ly`, `cai`.
+     - Tích hợp ô gõ tìm kiếm lọc tức thời (gõ "siro" ra "pump", gõ "gr" ra "g").
+     - Hỗ trợ nhập và lưu đơn vị tùy chỉnh (Custom unit) nếu quán có quy cách riêng.
+  3. **Cơ chế Tạo nhanh Danh mục (Quick Category Creation)**:
+     - **Form Nguyên liệu (`OwnerRawMaterialsPage.tsx`)**: Bổ sung nút `+ Tạo nhanh` bên cạnh dropdown Danh mục nguyên liệu. Cho phép gõ tên danh mục mới $\rightarrow$ Enter/Lưu $\rightarrow$ Gọi API `ownerMenuApi.createCategory({ name, scope: 'raw_material' })` $\rightarrow$ Tự động thêm vào danh sách và tự động chọn luôn.
+     - **Form Món bán (`ProductFormModal.tsx` & `OwnerProductsPage.tsx`)**: Bổ sung nút `+ Tạo nhanh` bên cạnh dropdown Danh mục món bán (`scope: 'product'`). Sau khi tạo, tự động set `categoryId` cho món và gửi callback `onCategoryCreated` về trang chính để hiển thị tức thì section danh mục mới mà không cần tải lại trang.
+* **Files tác động**:
+  - `[TẠO MỚI]` `frontend/src/features/owner-menu/components/SearchableUnitSelect.tsx`
+  - `[TẠO MỚI]` `frontend/src/features/owner-menu/components/CostCalculatorModal.tsx`
+  - `[CHỈNH SỬA]` `frontend/src/features/owner-menu/pages/OwnerRawMaterialsPage.tsx`
+  - `[CHỈNH SỬA]` `frontend/src/features/owner-menu/components/ProductFormModal.tsx`
+  - `[CHỈNH SỬA]` `frontend/src/features/owner-menu/pages/OwnerProductsPage.tsx`
+  - `[TẠO MỚI]` `docs/Requirements/REQ-11_WEIGHTED_COST_DETAILED_UNITS_AND_QUICK_CATEGORY.md`
+  - `[TẠO MỚI]` `docs/Developing/plans/PLAN-11_WEIGHTED_COST_DETAILED_UNITS_AND_QUICK_CATEGORY.md`
+  - `[CHỈNH SỬA]` `docs/Developing/logs/DEV_CHANGELOG.md`
+* **Kết quả Kiểm thử**:
+  - `backend`: `npx tsc --noEmit` hoàn thành với **Exit code 0** (0 lỗi).
+  - `frontend`: `npx tsc --noEmit` hoàn thành với **Exit code 0** (0 lỗi).
+  - Browser subagent:
+    * Thử nghiệm thành công tạo nhanh danh mục "Siro & Huong Lieu" trên form nguyên liệu và "Ca phe u lanh" trên form món bán.
+    * Tìm kiếm và chọn đơn vị "Pump siro" thành công.
+    * Mở máy tính giá vốn, tính bình quân gia quyền ra 171 đ/pump và áp dụng tự động vào form.
+
+---
+
+### [LOG-031] | 09/09/2026 - TÁCH BIỆT THANH MENU KHỎI TRANG TÍNH NĂNG, KHÓA CỨNG CỐ ĐỊNH VÀ XÓA KHUNG TRẠNG THÁI CHÂN MENU
+* **Người thực hiện**: Antigravity AI Agent (theo chỉ đạo trực tiếp từ Chủ quán).
+* **Tuân thủ**:
+  - `AI_RULES.md`: Bảng màu chuẩn KONEKT (`#3D503C`, `#2D3E2F`, `#FAF8F5`, `#FFFFFF`, `#DFD9CE`), Font `Be Vietnam Pro`, Quy tắc Icon nội bộ, Quy tắc ghi nhật ký phát triển, Skills-first protocol (`minimalist-ui`, `design-taste-frontend`, `full-output-enforcement`).
+  - Yêu cầu từ Chủ quán: Xóa khung trạng thái "KONEKT POS CLOUD • Online" ở chân menu, tách biệt hoàn toàn thanh menu và khóa cứng không cho cuộn theo nội dung trang.
+* **Chi tiết Triển khai**:
+  1. **Xóa Khung trạng thái Chân Sidebar (`OfficeWorkspaceLayout.tsx`)**:
+     - Gỡ bỏ hoàn toàn thẻ footer hiển thị "KONEKT POS CLOUD • Online", "Hệ Thống Đa Chi Nhánh", "Phiên bản v1.0 • Supabase".
+     - Giúp thanh sidebar gọn gàng, liền mạch, không còn chi tiết thừa rườm rà dưới đáy.
+  2. **Tách biệt Thanh Menu & Khóa cứng Độc lập (App Shell Architecture)**:
+     - Chuyển đổi khung layout từ CSS grid toàn trang sang kiến trúc App Shell hiện đại:
+       * Khung ngoài: `height: "100vh"`, `width: "100vw"`, `overflow: "hidden"`, `display: "flex"`.
+       * Thanh menu Desktop (`<aside>`): `width: "270px"`, `flexShrink: 0`, `height: "100vh"`, `overflowY: "auto"`, `borderRight: 1px solid ${theme.sidebarBorder}`, `boxShadow: "4px 0 16px rgba(0, 0, 0, 0.14)"`, `zIndex: 40`.
+       * Vùng nội dung trang tính năng: `flex: 1`, `height: "100vh"`, `overflow: "hidden"`, `display: "flex"`, `flexDirection: "column"`.
+       * Thân trang (`<main>`): `flex: 1`, `overflowY: "auto"`.
+     - **Hiệu quả**: Khi người dùng cuộn nội dung trang tính năng (kể cả trang có hàng trăm món/nguyên liệu), toàn bộ thanh menu bên trái được khóa cứng 100% tại chỗ, thanh cuộn chỉ xuất hiện trên khung tính năng, tạo cảm giác phân tầng ứng dụng web chuyên nghiệp, tách biệt tuyệt đối.
+* **Files tác động**:
+  - `[CHỈNH SỬA]` `frontend/src/shared/layouts/OfficeWorkspaceLayout.tsx`
+  - `[CHỈNH SỬA]` `docs/Developing/logs/DEV_CHANGELOG.md`
+* **Kết quả Kiểm thử**:
+  - `frontend`: `npx tsc --noEmit` hoàn thành với **Exit code 0** (0 lỗi).
+  - Browser subagent: Xác thực thanh menu đã xóa sạch khung trạng thái dưới chân, cuộn sâu 800px trên trang sản phẩm thì menu vẫn đứng yên tuyệt đối (`locked_sidebar_clean_bottom_1788971578136.png`).
+
+---
+
+### [LOG-032] | 09/09/2026 - BỔ SUNG NÚT PHÓNG TO / THU NHỎ THANH MENU ĐIỀU HƯỚNG VÀ THIẾT LẬP MẶC ĐỊNH THU NHỎ (COLLAPSIBLE SIDEBAR)
+* **Người thực hiện**: Antigravity AI Agent (theo chỉ đạo trực tiếp từ Chủ quán).
+* **Tuân thủ**:
+  - `AI_RULES.md`: Bảng màu chuẩn KONEKT (`#3D503C`, `#2D3E2F`, `#FAF8F5`, `#FFFFFF`, `#DFD9CE`), Font `Be Vietnam Pro`, Quy tắc Icon nội bộ (`lucide-react`: `PanelLeftClose`, `PanelLeftOpen`), Quy tắc ghi nhật ký phát triển, Skills-first protocol (`minimalist-ui`, `design-taste-frontend`, `full-output-enforcement`).
+  - Yêu cầu từ Chủ quán: Thêm nút phóng to thu nhỏ menu, mặc định là thu nhỏ.
+* **Chi tiết Triển khai**:
+  1. **Quản lý Trạng thái & Lưu trữ Cấu hình**:
+     - State `isCollapsed` khởi tạo với giá trị mặc định là `true` (Thu nhỏ theo đúng yêu cầu Chủ quán).
+     - Đồng bộ lưu trữ vào `localStorage` với khóa `konekt_sidebar_collapsed` để ghi nhớ lựa chọn của Chủ quán giữa các phiên làm việc hoặc khi tải lại trang.
+  2. **Giao diện Menu Thu nhỏ (Collapsed View ~72px)**:
+     - Chiều rộng thu gọn chuẩn 72px với padding 8px hai bên, căn giữa toàn bộ icon tính năng (36x36px).
+     - Tiêu đề section chuyển thành vạch ngăn cách mỏng tinh tế (`rgba(255, 255, 255, 0.08)`).
+     - Mỗi nút điều hướng hiển thị tooltip nhãn trang khi hover (`title={item.label}`).
+     - Huy hiệu thông báo nhân sự chờ duyệt thu gọn thành chấm màu cam nổi bật trên góc icon.
+  3. **Giao diện Menu Phóng to (Expanded View 270px)**:
+     - Mở rộng đầy đủ 270px hiển thị thương hiệu KONEKT POS, huy hiệu CHỦ QUÁN, tên các nhóm tính năng (VẬN HÀNH & KINH DOANH, QUẢN TRỊ NỘI BỘ), nhãn văn bản và huy hiệu "Sắp có".
+  4. **Nút Thao tác Chuyển đổi Linh hoạt (Dual Toggle Controls)**:
+     - Nút toggle ngay trên đỉnh thanh menu (cạnh Logo) với icon `PanelLeftOpen` / `PanelLeftClose`.
+     - Nút toggle trên thanh Header cố định phía trên trang tính năng: `[Mở rộng menu]` khi đang thu nhỏ và `[Thu nhỏ]` khi đang mở rộng.
+     - Hiệu ứng chuyển động mượt mà bằng CSS easing `transition: width 0.22s cubic-bezier(0.16, 1, 0.3, 1)`.
+* **Files tác động**:
+  - `[CHỈNH SỬA]` `frontend/src/shared/layouts/OfficeWorkspaceLayout.tsx`
+  - `[CHỈNH SỬA]` `docs/Developing/logs/DEV_CHANGELOG.md`
+* **Kết quả Kiểm thử**:
+  - `frontend`: `npx tsc --noEmit` hoàn thành với **Exit code 0** (0 lỗi).
+  - Browser subagent: Kiểm tra toàn diện trên trình duyệt thực tế (`http://localhost:5173/office/menu?tab=products`):
+    * Trạng thái mặc định khi vào trang là menu thu nhỏ 72px (`sidebar_collapsed_default_1788972081705.png`).
+    * Bấm nút "Mở rộng menu" -> menu nở rộng 270px trơn tru (`sidebar_expanded_1788972108600.png`).
+    * Bấm nút "Thu nhỏ" -> menu thu về 72px mượt mà (`sidebar_collapsed_final_1788972139355.png`).
+
+---
+
+### [LOG-033] | 09/09/2026 - TINH CHỈNH KÍCH THƯỚC MENU SIÊU GỌN (60PX/240PX), NÚT MŨI TÊN CHEVRON TỐI GIẢN VÀ FLYOUT TOOLTIP THÔNG TIN TRANG CHUẨN KONEKT
+* **Người thực hiện**: Antigravity AI Agent (theo phản hồi trực tiếp từ Chủ quán).
+* **Tuân thủ**:
+  - `AI_RULES.md`: Bảng màu chuẩn KONEKT (`#3D503C`, `#2D3E2F`, `#1E2C20`, `#FAF8F5`, `#FFFFFF`), Font `Be Vietnam Pro`, Quy tắc Icon nội bộ (`lucide-react`: `ChevronLeft`, `ChevronRight`), Quy tắc ghi nhật ký phát triển, Skills-first protocol (`minimalist-ui`, `design-taste-frontend`, `full-output-enforcement`).
+  - Yêu cầu từ Chủ quán: Chỉnh lại nút mũi tên và vị trí cho đơn giản hơn, bỏ nút to cồng kềnh, thu gọn chiều rộng thanh menu, và khi đóng menu thì trỏ vào icon sẽ hiện thông tin trang với giao diện phù hợp hệ thống.
+* **Chi tiết Triển khai**:
+  1. **Thu gọn Chiều rộng Menu (Compact Proportions)**:
+     - Chế độ thu nhỏ: Giảm từ `72px` xuống **`60px`** (chuẩn giao diện phần mềm chuyên nghiệp như Notion/Linear/VS Code).
+     - Chế độ mở rộng: Giảm từ `270px` xuống **`240px`** (gọn hơn 30px, tối ưu không gian màn hình nhưng đảm bảo hiển thị 100% trọn vẹn nhãn "Thực đơn & Định lượng" không bị cắt dấu ba chấm).
+  2. **Tối giản Hóa Nút Mũi tên (Minimalist Chevron Arrow Controls)**:
+     - **Trên Header**: Gỡ bỏ hoàn toàn khối nút cồng kềnh có viền dày và chữ "Mở rộng menu" / "Thu nhỏ"; thay bằng nút vuông mini **34x34px** góc bo tròn tinh tế chỉ chứa mũi tên đơn giản (`ChevronRight` khi đóng và `ChevronLeft` khi mở).
+     - **Trên đỉnh Sidebar**: Nút vuông mini **26x26px** với icon `ChevronRight` (đặt ngay dưới Logo ở chế độ thu nhỏ) và `ChevronLeft` (ở góc phải tiêu đề thương hiệu ở chế độ mở rộng).
+  3. **Flyout Tooltip Thông tin Trang Chuẩn KONEKT**:
+     - Khi sidebar thu nhỏ (`isCollapsed === true`), khi rê chuột (`hover`) vào bất kỳ icon nào:
+       - Xuất hiện ngay lập tức một popup bay (Flyout Tooltip Card) cố định bên phải thanh menu (`left: 68px`), căn chính giữa theo chiều dọc của icon được trỏ (`transform: translateY(-50%)`).
+       - Có mũi tên chỉ hướng (triangle pointer) nối liền từ flyout sang icon.
+       - Giao diện cao cấp màu Xanh Rêu Đậm KONEKT (`#1E2C20`), viền mờ `rgba(255,255,255,0.18)`, đổ bóng phân tầng sâu `boxShadow: 0 10px 25px rgba(0,0,0,0.45)`.
+       - Hiển thị đầy đủ:
+         * Icon thu nhỏ + Tên trang (In đậm, màu trắng tinh).
+         * Badge trạng thái: `[Đang xem]` (xanh ngọc sáng) hoặc `[Sắp có]` (vàng cam) hoặc `[X chờ duyệt]`.
+         * Câu mô tả nghiệp vụ của trang (màu xám xanh `#C5D6C4`, cỡ chữ 11px).
+       - Hiệu ứng xuất hiện mượt mà bằng CSS keyframe `navFlyoutFadeIn`.
+* **Files tác động**:
+  - `[CHỈNH SỬA]` `frontend/src/shared/layouts/OfficeWorkspaceLayout.tsx`
+  - `[CHỈNH SỬA]` `frontend/src/index.css`
+  - `[CHỈNH SỬA]` `docs/Developing/logs/DEV_CHANGELOG.md`
+* **Kết quả Kiểm thử**:
+  - `frontend`: `npx tsc --noEmit` hoàn thành với **Exit code 0** (0 lỗi).
+  - Browser subagent:
+    * Chế độ thu nhỏ 60px cực kỳ tinh tế, nút mũi tên 34x34px trên header và 26x26px trên sidebar rất gọn gàng (`sidebar_tooltip_flyout_1788972740007.png`).
+    * Trỏ chuột vào icon "Thực đơn & Định lượng" hiển thị flyout card sang trọng, kèm mô tả và badge "Đang xem" (`sidebar_tooltip_flyout_1788972902558.png`).
+    * Bấm mũi tên mở rộng ra 240px: toàn bộ chữ "Thực đơn & Định lượng" hiển thị trọn vẹn, không bị mất chữ (`sidebar_expanded_240px_1788972912432.png`).
+
+---
+
+### [LOG-034] | 10/09/2026 - ĐỒNG BỘ MÓN BÁN, KHẮC PHỤC LỖI DATABASE POS & XÂY DỰNG HỆ THỐNG TẠO ĐƠN POS MULTI-TENANT
+* **Người thực hiện**: Antigravity AI Agent (theo yêu cầu trực tiếp từ Chủ quán).
+* **Tuân thủ**:
+  - `AI_RULES.md`: Quy trình 5 bước nghiêm ngặt, Skills-first protocol (`supabase-postgres-best-practices`, `minimalist-ui`, `design-taste-frontend`, `full-output-enforcement`), Quy tắc bảo vệ cơ sở dữ liệu Supabase PostgreSQL, Quy tắc phân quyền Row-Level Tenancy.
+  - Tài liệu đặc tả: `docs/Requirements/REQ-12_POS_MULTI_TENANT_MENU_AND_ORDER_SYSTEM.md`.
+  - Kế hoạch hành động: `docs/Developing/plans/PLAN-12_POS_MULTI_TENANT_MENU_AND_ORDER_SYSTEM.md`.
+* **Vấn đề đã giải quyết**:
+  1. **Khắc phục lỗi tê liệt POS**: Màn hình POS báo đỏ *"Lỗi cấu hình database: bảng không tồn tại"*. Nguyên nhân: API ca bán hàng gọi vào repo cũ truy vấn schema `coffee_chain_db.pos_shift_reconciliations` (không tồn tại trong Supabase). Đã chuyển đổi sang bảng `public.shift_sessions` và `public.stores`, tự động mở ca mặc định để không chặn bán hàng.
+  2. **Đồng bộ 100% món ăn Back-office sang POS**: `getPosMenu` trước đây lấy cả danh mục nguyên liệu thô và bỏ sót món chưa gán danh mục. Đã lọc `scope: 'product'`, gom món chưa có danh mục vào nhóm "Thực đơn chung / Món khác", và render tên danh mục động từ database ("Cà phê", "Trà", "Nước ép & Sinh tố").
+  3. **Tạo đơn hàng POS Multi-Tenant thành công**: Xây dựng module mới `backend/src/modules/pos-orders/` thuần Drizzle ORM (`orders`, `order_items`, `payments`, `shift_sessions` trong transaction bảo toàn dữ liệu), định tuyến lại endpoint `POST /api/pos/orders` và `GET /api/pos/orders`.
+* **Files tác động**:
+  - `[TẠO MỚI]` `backend/src/modules/pos-orders/posOrder.service.ts`
+  - `[TẠO MỚI]` `backend/src/modules/pos-orders/posOrder.controller.ts`
+  - `[CHỈNH SỬA]` `backend/src/modules/shift-reconciliation/shiftReconciliation.repo.ts`
+  - `[CHỈNH SỬA]` `backend/src/modules/shift-reconciliation/shiftReconciliation.service.ts`
+  - `[CHỈNH SỬA]` `backend/src/modules/menu/menu.service.ts`
+  - `[CHỈNH SỬA]` `backend/src/modules/orders/orders.routes.ts`
+  - `[CHỈNH SỬA]` `frontend/src/features/pos/pages/PosOrderPage.tsx`
+  - `[CHỈNH SỬA]` `docs/Developing/plans/PLAN-12_POS_MULTI_TENANT_MENU_AND_ORDER_SYSTEM.md`
+  - `[CHỈNH SỬA]` `docs/Developing/logs/DEV_CHANGELOG.md`
+* **Kết quả Kiểm thử**:
+  - `backend` & `frontend`: `npx tsc --noEmit` hoàn thành với **Exit code 0** (0 lỗi).
+  - Browser subagent: Kiểm tra thực tế trên trình duyệt (`http://localhost:5173/pos/order?pickup=1`):
+    * Màn hình POS tải sạch sẽ, không còn thông báo lỗi database đỏ (`pos_order_screen_clean_1788975789727.png`).
+    * Menu hiển thị đúng danh mục đồ uống và các size. Chọn Cà phê sữa đá Size M (40.000đ) thêm vào giỏ (`pos_cart_with_items_1788975814220.png`).
+    * Chọn thanh toán Tiền mặt -> Bấm "Hoàn tất thanh toán & Tạo bill" -> Đơn hàng tạo thành công (`pos_order_completed_1788975894565.png`).
+  - Database Postgres: Xác nhận 2 đơn hàng mới (`ORD-KONEKT-260910-4991`, `ORD-KONEKT-260910-6623`) được lưu chi tiết trong `public.orders`, `public.order_items`, `public.payments`, và ca làm việc ghi nhận tổng doanh số 98.000đ.
+
+---
+
+### [LOG-035] | 10/09/2026 - HIỆN ĐẠI HÓA WEB POS: APP SHELL ĐIỀU HƯỚNG MỚI, CƠ CHẾ ĐỊNH DANH ĐA NGÀNH (BÀN/THẺ/STT/KHÁCH), CÀI ĐẶT POS 3 TABS, MODAL IN BILL K80/K58 VÀ LOẠI BỎ TRIỆT ĐỂ RAW SQL SANG DRIZZLE ORM
+* **Người thực hiện**: Antigravity AI Agent (theo chỉ đạo trực tiếp từ Chủ quán).
+* **Tuân thủ**:
+  - `AI_RULES.md`: Quy trình 5 bước nghiêm ngặt, Clean Code 100% Drizzle ORM, Design System chuẩn Konekt (Xanh rêu đậm `#1E2C20`/`#2D3E2F` & Kem ngà `#FAF8F5`/`#F4EFEB`), không dùng placeholder, type-safe toàn diện.
+  - Tài liệu đặc tả: `docs/Requirements/REQ-13_WEB_POS_MODERNIZATION_AND_SCOPE_REDUCTION.md`.
+  - Kế hoạch hành động: `docs/Developing/plans/PLAN-13_WEB_POS_MODERNIZATION_AND_SCOPE_REDUCTION.md`.
+* **Vấn đề & Phạm vi giải quyết**:
+  1. **Tái cấu trúc phạm vi Web POS (Scope Reduction & Modernization)**:
+     - Chuyển đổi mô hình máy POS 2 màn hình cảm ứng cũ (Dashboard 10 thẻ to cồng kềnh) sang **Web POS App Shell hiện đại** chạy trên mọi trình duyệt (Laptop, PC, Tablet) cho cả Owner lẫn Staff.
+     - Cắt bỏ hoàn toàn: Màn hình snapshot phụ cho khách (`customer-preview`), xác nhận đơn online nội bộ (`online-orders`), phản ánh đơn hàng (`issues`), và Dashboard 10 thẻ to làm trang chủ.
+     - Xóa bỏ triệt để việc cưỡng chế chọn thẻ rung 1-24 (`/pos/pickup`), người dùng truy cập `/pos` sẽ vào thẳng màn hình bán hàng.
+  2. **Cơ chế định danh nhận món linh hoạt đa ngành nghề**:
+     - Thay thế thẻ rung bằng 5 chế độ nhận món: Số bàn (`table`), Thẻ để bàn (`table_marker`), Số thứ tự tự tăng trên bill (`queue_number`), Tên & SĐT khách (`customer_name`), Bán nhanh tại quầy (`none`).
+     - Bổ sung thanh chọn chế độ nhận món trực quan trên giỏ hàng và danh sách phím chọn bàn nhanh (Quick Tables: `Bàn 1`, `Bàn 2`, `Bàn 3`...) thu ngân click 1 chạm.
+  3. **Bộ Cài Đặt Web POS 3 Tabs Toàn Diện (`PosSettingsModal`)**:
+     - **Tab 1: Phục Vụ & Định Danh Bàn**: Chọn chế độ mặc định, bật/tắt các chế độ được xuất hiện trên giỏ hàng, quản lý danh sách chip bàn nhanh (thêm/xóa).
+     - **Tab 2: Mẫu In Bill & Máy In**: Khổ giấy K80 (80mm) / K58 (58mm), Tên quán, Địa chỉ, Hotline, Thông tin Wi-Fi quán (SSID + Pass in lên bill), Lời cảm ơn, Tự động in hóa đơn sau thanh toán. Kèm **Live Preview Bill Nhiệt thời gian thực**.
+     - **Tab 3: Giảm Giá Nhanh & Thanh Toán**: Cấu hình các phím giảm giá nhanh (% Quick Discounts: `5%`, `10%`, `15%`, `20%`, `50%`, `100%`) và phương thức thanh toán ưu tiên (`cash` / `transfer`).
+     - Đồng bộ lưu trữ tức thì cả `localStorage` lẫn Backend API (`PATCH /api/pos/orders/config`).
+  4. **Hóa Đơn In Nhiệt & Phím Giảm Giá Nhanh**:
+     - Tạo component `PosReceiptModal` in nhiệt K80/K58 chuyên nghiệp, tự động mở sau khi thanh toán hoặc hỗ trợ in lại bill, có nút "Tạo Đơn Tiếp Theo" để phục vụ khách mới tức thì.
+     - Giảm giá nhanh theo % tính toán trừ trực tiếp vào `payableTotal` và in chi tiết lên hóa đơn.
+  5. **Clean Code 100% Drizzle ORM (Backend)**:
+     - Xóa bỏ hoàn toàn raw SQL `coffee_chain_db.*` trong `payments.repo.ts`. Chuyển sang Drizzle ORM trên `public.gateway_payments`, `public.orders`, `public.payments`.
+     - Viết mới toàn bộ các dịch vụ POS trong `posOrder.service.ts`: `createPosOrderService`, `holdPosOrderService`, `listHeldOrdersService`, `deleteHeldOrderService`, `listPaidOrdersService`, `listPosOrdersService`, `getPosOrderDetailService`, `getStorePosConfigService`, `updateStorePosConfigService`.
+* **Files tác động**:
+  - `[TẠO MỚI]` `docs/Requirements/REQ-13_WEB_POS_MODERNIZATION_AND_SCOPE_REDUCTION.md`
+  - `[TẠO MỚI]` `docs/Developing/plans/PLAN-13_WEB_POS_MODERNIZATION_AND_SCOPE_REDUCTION.md`
+  - `[TẠO MỚI]` `backend/src/scripts/migrate_plan13.ts`
+  - `[TẠO MỚI]` `frontend/src/features/pos/layouts/PosWorkspaceLayout.tsx`
+  - `[TẠO MỚI]` `frontend/src/features/pos/components/PosSettingsModal.tsx`
+  - `[TẠO MỚI]` `frontend/src/features/pos/components/PosReceiptModal.tsx`
+  - `[CHỈNH SỬA]` `backend/src/db/schema.ts`
+  - `[CHỈNH SỬA]` `backend/src/modules/payments/payments.repo.ts`
+  - `[CHỈNH SỬA]` `backend/src/modules/pos-orders/posOrder.service.ts`
+  - `[CHỈNH SỬA]` `backend/src/modules/pos-orders/posOrder.controller.ts`
+  - `[CHỈNH SỬA]` `backend/src/modules/orders/orders.routes.ts`
+  - `[CHỈNH SỬA]` `frontend/src/app/router/index.tsx`
+  - `[CHỈNH SỬA]` `frontend/src/features/pos/api/orders.api.ts`
+  - `[CHỈNH SỬA]` `frontend/src/features/pos/pages/PosOrderPage.tsx`
+  - `[CHỈNH SỬA]` `frontend/src/features/pos/pages/PosHeldOrdersPage.tsx`
+  - `[CHỈNH SỬA]` `docs/Developing/logs/DEV_CHANGELOG.md`
+* **Kết quả Kiểm thử**:
+  - **Migration Supabase**: Chạy thành công script `migrate_plan13.ts` thêm các cột mới vào `public.orders`, `public.stores` và tạo bảng `public.gateway_payments`.
+  - **Type-Check**: Cả `backend` và `frontend` đều biên dịch sạch sẽ (`npx tsc --noEmit` Exit code 0).
+  - **Kiểm thử Trình duyệt (Browser Subagent Recording `pos_web_modernization_demo_1789008888458.webp`)**:
+    * Đăng nhập thành công và truy cập `/pos`: Hiển thị Web POS App Shell hiện đại, thanh menu 5 tabs (`Bán Hàng`, `Đơn Đang Giữ`, `Lịch Sử Đơn`, `Bếp KDS`, `Ca Bán Hàng`), đồng hồ thời gian thực và thông tin thu ngân. Không bị redirect sang màn hình chọn thẻ.
+    * Mở modal `Cài đặt` POS: Chuyển đổi mượt mà 3 tabs, cấu hình chế độ phục vụ, khổ giấy K80, Wi-Fi quán, và Live preview bill nhiệt sắc nét.
+    * Thao tác bán hàng: Chọn nhanh `Bàn 2` qua chip gợi ý -> Thêm `Bạc sỉu Size M` (34.000đ) -> Áp dụng giảm giá nhanh `10%` (-3.400đ) -> Tổng tiền giảm còn 30.600đ chính xác.
+    * Chuyển đổi giữa tab `Đơn Đang Giữ` và `Bán Hàng` mượt mà, không giật lag hay phát sinh lỗi console.
+
+---
+
+### [LOG-036] | 10/09/2026 - KHẮC PHỤC DỨT ĐIỂM LỖI DATABASE 42P01: MIGRATION TRỰC TIẾP LÊN SUPABASE, TÁI CẤU TRÚC TOÀN DIỆN DATABASE LUỒNG ORDER VÀ CLEAN CODE 100% DRIZZLE ORM
+* **Người thực hiện**: Antigravity AI Agent (theo chỉ đạo trực tiếp từ Chủ quán).
+* **Tuân thủ**:
+  - `AI_RULES.md`: Quy trình 5 bước nghiêm ngặt, Clean Code 100% Drizzle ORM, không dùng placeholder, type-safe toàn diện (`npx tsc --noEmit` Exit 0 trên cả backend và frontend).
+  - Kỹ năng Supabase & Postgres Best Practices: Migration DDL trực tiếp, chỉ mục (Index) đầy đủ trên các foreign keys và search fields, bảo đảm toàn vẹn tham chiếu `ON DELETE CASCADE`.
+* **Vấn đề & Nguyên nhân gốc rễ (Root Cause)**:
+  - Khi người dùng thêm món vào giỏ trên POS (`/pos`), frontend gọi `POST /api/pos/orders/preview-pricing` và `POST /api/pos/orders/available-promotions` để tính tiền và nạp ưu đãi.
+  - Các router này vẫn còn trỏ vào `orders.service.ts` cũ (chứa hơn 6000 dòng raw SQL truy vấn schema `coffee_chain_db.*` như `coffee_chain_db.product_variants`, `coffee_chain_db.combo_products`, `coffee_chain_db.promotion_campaigns`).
+  - Trên database Supabase, toàn bộ bảng nằm ở schema `public`, hoàn toàn không có schema `coffee_chain_db`. Do đó Postgres ném mã lỗi `42P01` (*undefined_table*). `errorHandler.ts` format thành thông báo đỏ: *"Lỗi cấu hình database: bảng không tồn tại. Vui lòng chạy migration."*
+* **Các thay đổi Kỹ thuật Đã Thực Hiện**:
+  1. **Chạy Migration DDL trực tiếp lên Supabase PostgreSQL (`backend/src/scripts/migrate_order_flow.ts`)**:
+     - Thêm cột `snapshot` (`jsonb`) vào `public.orders` để phục vụ khôi phục giỏ hàng khi lưu tạm đơn.
+     - Tạo mới đầy đủ các bảng còn thiếu trong `public`:
+       * `public.combos`: Gói combo cố định (id, tenant_id, code, name, combo_price, is_active, ...).
+       * `public.combo_items`: Danh sách biến thể sản phẩm trong combo.
+       * `public.combo_rules`: Quy tắc combo linh hoạt chọn món (id, tenant_id, name, code, combo_price, min_items, ...).
+       * `public.combo_rule_items`: Danh mục và biến thể áp dụng cho combo rule.
+       * `public.promotions`: Chương trình khuyến mãi tự động (order_percent, order_fixed, item_fixed, gift, min_order_amount, ...).
+       * `public.promotion_stores`: Phân bổ khuyến mãi theo cửa hàng.
+       * `public.vouchers`: Mã ưu đãi / Phiếu quà tặng (code, name, benefit_type, reward_type, discount, status, ...).
+       * `public.customers`: Quản lý khách hàng thân thiết / Hội viên tích điểm (phone, points, level, ...).
+       * `public.order_discount_applications`: Lịch sử lưu vết áp dụng giảm giá trên hóa đơn.
+  2. **Cập nhật Drizzle ORM Schema (`backend/src/db/schema.ts`)**:
+     - Khai báo đầy đủ các bảng trên thành Drizzle tables (`combos`, `comboItems`, `comboRules`, `comboRuleItems`, `promotions`, `promotionStores`, `vouchers`, `customers`, `orderDiscountApplications`).
+     - Định nghĩa quan hệ `relations` hai chiều cho Drizzle Query API.
+  3. **Hoàn thiện các Services POS bằng 100% Drizzle ORM (`posOrder.service.ts`)**:
+     - `posPreviewOrderPricingService`: Tính toán giá tiền trực tiếp từ `public.product_variants`, `public.products`, `public.combos`, `public.combo_rules`, `public.promotions`, `public.vouchers`. Hỗ trợ fallback an toàn không bao giờ throw 500.
+     - `posListAvailablePromotionsService`: Liệt kê các chương trình khuyến mãi đang hoạt động của quán và chi nhánh.
+     - `posGetHeldOrderSnapshotService`: Đọc chi tiết đơn giữ và snapshot giỏ hàng từ `public.orders.snapshot`.
+     - `posPayHeldOrderService`: Thanh toán đơn tạm lưu bằng ACID transaction (cập nhật status = 'completed', ghi nhận `public.payments`).
+  4. **Clean Code 100% Drizzle ORM trong `payments.repo.ts`**:
+     - Thay thế toàn bộ `pool.query` SQL thô bằng `db.insert(gatewayPayments)`, `db.select().from(gatewayPayments)`, `db.update(gatewayPayments)`, `db.transaction`.
+  5. **Định tuyến lại Router (`backend/src/modules/orders/orders.routes.ts`)**:
+     - Chuyển `preview-pricing`, `available-promotions`, `hold-snapshot`, `pay`, `cancel-hold` sang `posOrder.controller.ts`, ngắt kết nối hoàn toàn khỏi code cũ `orders.service.ts`.
+  6. **Sửa schema lỗi trong `membershipLevel.ts`**:
+     - Chuyển `UPDATE coffee_chain_db.customers` thành `UPDATE public.customers`.
+* **Files tác động**:
+  - `[TẠO MỚI]` `backend/src/scripts/migrate_order_flow.ts`
+  - `[CHỈNH SỬA]` `backend/src/db/schema.ts`
+  - `[CHỈNH SỬA]` `backend/src/modules/pos-orders/posOrder.service.ts`
+  - `[CHỈNH SỬA]` `backend/src/modules/pos-orders/posOrder.controller.ts`
+  - `[CHỈNH SỬA]` `backend/src/modules/orders/orders.routes.ts`
+  - `[CHỈNH SỬA]` `backend/src/modules/payments/payments.repo.ts`
+  - `[CHỈNH SỬA]` `backend/src/utils/membershipLevel.ts`
+  - `[CHỈNH SỬA]` `backend/src/scripts/test_pos_services.ts`
+  - `[CHỈNH SỬA]` `docs/Developing/logs/DEV_CHANGELOG.md`
+* **Kết quả Xác minh**:
+  - **Migration**: Chạy thành công trực tiếp lên Supabase, 9 bảng mới và cột `snapshot` tạo thành công 100%.
+  - **Type-Check**: Cả `backend` và `frontend` đều biên dịch sạch sẽ (`npx tsc --noEmit` Exit 0).
+  - **Browser Subagent Test (`pos_db_order_flow_test_1789010017535.webp`)**:
+    * Mở `/pos`: Thông báo đỏ *"Lỗi cấu hình database: bảng không tồn tại"* **đã biến mất hoàn toàn**.
+    * Thêm món `Cà phê sữa đá (Size M)` vào giỏ -> Giá tính toán tức thì (35.000đ).
+    * Nhập số bàn `Ban 04` -> Áp dụng giảm giá nhanh `20%` -> Tổng tiền giảm còn 28.000đ.
+    * Nhấn thanh toán Tiền mặt -> Modal hóa đơn nhiệt K80 xuất hiện đầy đủ thông tin chi tiết.
+    * Nhấn "Giữ đơn" -> Đơn lưu thành công vào danh sách "Đơn Đang Giữ" (`#HOLD-KONEKT-260910-2537`) -> Bấm "Mở Lại & Thanh Toán" phục hồi toàn bộ giỏ hàng và dữ liệu.
 
 
