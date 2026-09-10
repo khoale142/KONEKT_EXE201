@@ -275,7 +275,7 @@ export async function posPreviewOrderPricing(payload: {
 }
 
 export async function posCreateOrder(payload: {
-  pickupNumber: number;
+  pickupNumber?: number;
   customerId?: number;
   voucherCode?: string;
   promotionCode?: string;
@@ -284,8 +284,13 @@ export async function posCreateOrder(payload: {
   combos?: PosCreateOrderCombo[];
   appliedComboRules?: PosAppliedComboRule[];
   payment: PosCreateOrderPayment;
-  orderType?: PosOrderType;
-  serviceMode?: PosServiceMode;
+  orderType?: string;
+  serviceMode?: string;
+  serviceIdentifier?: string;
+  customerName?: string;
+  customerPhone?: string;
+  discountAmount?: number;
+  discountReason?: string;
   specialNote?: string;
 }) {
   const r = await api.post("/pos/orders", payload);
@@ -294,7 +299,7 @@ export async function posCreateOrder(payload: {
 
 /** Tạo đơn pending cho thanh toán gateway (VietQR). Trả về orderId để gọi POST /payments/vietqr/init. */
 export async function posCreateOrderForGateway(payload: {
-  pickupNumber: number;
+  pickupNumber?: number;
   customerId?: number;
   voucherCode?: string;
   promotionCode?: string;
@@ -302,8 +307,13 @@ export async function posCreateOrderForGateway(payload: {
   items: PosCreateOrderItem[];
   combos?: PosCreateOrderCombo[];
   appliedComboRules?: PosAppliedComboRule[];
-  orderType?: PosOrderType;
-  serviceMode?: PosServiceMode;
+  orderType?: string;
+  serviceMode?: string;
+  serviceIdentifier?: string;
+  customerName?: string;
+  customerPhone?: string;
+  discountAmount?: number;
+  discountReason?: string;
   specialNote?: string;
 }) {
   const r = await api.post("/pos/orders/create-for-gateway", {
@@ -325,7 +335,7 @@ export async function posCreateOrderForGateway(payload: {
 }
 
 export async function posHoldOrder(payload: {
-  pickupNumber: number;
+  pickupNumber?: number;
   customerId?: number;
   voucherCode?: string;
   promotionCode?: string;
@@ -334,8 +344,11 @@ export async function posHoldOrder(payload: {
   combos?: PosCreateOrderCombo[];
   appliedComboRules?: PosAppliedComboRule[];
   snapshot?: any;
-  orderType?: PosOrderType;
-  serviceMode?: PosServiceMode;
+  orderType?: string;
+  serviceMode?: string;
+  serviceIdentifier?: string;
+  customerName?: string;
+  customerPhone?: string;
   specialNote?: string;
 }) {
   const r = await api.post("/pos/orders/hold", payload);
@@ -347,7 +360,12 @@ export async function posPayHeldOrder(
   payload: {
     payment: PosCreateOrderPayment;
     orderType?: PosOrderType;
-    serviceMode?: PosServiceMode;
+    serviceMode?: string;
+    serviceIdentifier?: string;
+    customerName?: string;
+    customerPhone?: string;
+    discountReason?: string;
+    discountAmount?: number;
     specialNote?: string;
   },
 ) {
@@ -703,4 +721,41 @@ export async function posConfirmOnlineOrder(
       serviceMode?: PosServiceMode;
     };
   };
+}
+
+export async function posDeleteHeldOrder(orderId: number) {
+  const r = await api.delete(`/pos/orders/held/${orderId}`);
+  return r.data as { ok: boolean; message: string };
+}
+
+export interface PosStoreConfigResponse {
+  ok: boolean;
+  config: {
+    defaultOrderType: string;
+    defaultServiceMode: string;
+    enabledServiceModes: string[];
+    autoPrintReceipt: boolean;
+    storeDisplayName?: string;
+    receiptAddress?: string;
+    receiptPhone?: string;
+    receiptFooterMessage?: string;
+    paperSize?: "80mm" | "58mm";
+    wifiSsid?: string;
+    wifiPassword?: string;
+    quickTables?: string[];
+    quickDiscounts?: number[];
+    defaultPaymentMethod?: "cash" | "transfer";
+    printCashierName?: boolean;
+    [key: string]: any;
+  };
+}
+
+export async function posGetStoreConfig() {
+  const r = await api.get("/pos/orders/config");
+  return r.data as PosStoreConfigResponse;
+}
+
+export async function posUpdateStoreConfig(config: Partial<PosStoreConfigResponse["config"]>) {
+  const r = await api.patch("/pos/orders/config", config);
+  return r.data as PosStoreConfigResponse;
 }

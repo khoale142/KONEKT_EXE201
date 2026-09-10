@@ -107,4 +107,21 @@ export const authApi = {
     city: string;
   }) =>
     api.post("/auth/customer/register-membership", payload).then((r) => r.data),
+
+  // ── KONEKT Multi-Tenant APIs ──
+  registerOwner: (payload: {
+    brandName: string;
+    fullName: string;
+    email: string;
+    password: string;
+    phone?: string;
+    address?: string;
+  }) => api.post("/auth/register-owner", payload).then((r) => r.data),
+
+  loginKonekt: (payload: { identifier: string; password: string }) =>
+    api.post("/auth/login-konekt", payload).then((r) => r.data),
+
+  demoLogin: (role: "owner" | "manager" | "staff") =>
+    api.post("/auth/demo-login", { role }).then((r) => r.data),
 };
+

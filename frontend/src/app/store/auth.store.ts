@@ -16,12 +16,36 @@ export type AuthUser = {
   sub: string;
   username?: string;
   fullName?: string;
+  email?: string;
   portal: Portal;
   roles?: string[];
+  tenantId?: number;      // Multi-tenant: ID thương hiệu (REQ-01)
+  tenantName?: string;
+  tenantCode?: string;
   storeIds?: number[];
   storeId?: number;
   storeName?: string;
   stores?: AuthStoreItem[];
+  customPermissions?: string[]; // Granular permissions (can_invite_staff, can_view_revenue, etc.)
+};
+
+/** Kiểm tra user có phải Owner hoặc Platform Admin không (PLAN-01) */
+export const isOwnerOrAdmin = (user: AuthUser | null): boolean => {
+  if (!user?.roles) return false;
+  return user.roles.some(r => r === 'owner' || r === 'platform_admin');
+};
+
+/** Kiểm tra user có phải Owner không */
+export const isOwner = (user: AuthUser | null): boolean => {
+  if (!user?.roles) return false;
+  return user.roles.includes('owner');
+};
+
+/** Kiểm tra quyền hạn chi tiết (Granular Permission Check) */
+export const hasPermission = (user: AuthUser | null, permission: string): boolean => {
+  if (!user) return false;
+  if (isOwnerOrAdmin(user)) return true; // Owner & Admin luôn có toàn quyền
+  return user.customPermissions?.includes(permission) ?? false;
 };
 
 export type CustomerCheckinFlash = {
@@ -198,6 +222,8 @@ function extractUserFromMePayload(payload: any, fallback: AuthUser | null): Auth
     Array.isArray(raw.roles) ? raw.roles : fallback?.roles,
   );
 
+  const tenantId = Number(raw.tenantId) || fallback?.tenantId;
+
   const nextUser: AuthUser = {
     id: Number.isFinite(id) ? id : fallback?.id,
     sub,
@@ -212,6 +238,7 @@ function extractUserFromMePayload(payload: any, fallback: AuthUser | null): Auth
       fallback?.fullName,
     portal,
     roles,
+    tenantId: Number.isFinite(tenantId) ? tenantId : undefined,
     storeIds,
     storeId: Number(raw.storeId) || fallback?.storeId,
     storeName:
@@ -244,19 +271,32 @@ async function tryRestoreCustomerDailyCheckin(user: AuthUser | null): Promise<Cu
   }
 }
 
+/**
+ * STORE Portal: Owner-Centric Role Mapping (REQ-01 / PLAN-01)
+ * ─────────────────────────────────────────────────────────────
+ * owner → có thể truy cập tất cả store routes
+ * store_manager → quản lý store được phân công
+ * staff → nhân viên tại quầy
+ */
 export const storeRoleToBasePath = (roles?: string[]) => {
   const list = roles || [];
+  if (list.includes("owner") || list.includes("platform_admin")) return "/store/manager";
   if (list.includes("store_manager")) return "/store/manager";
-  if (list.includes("shift_leader") || list.includes("staff")) return "/store/staff";
+  if (list.includes("staff")) return "/store/staff";
   return "/store";
 };
 
+/**
+ * OFFICE Portal: Owner-Centric Role Mapping (REQ-01 / PLAN-01)
+ * ─────────────────────────────────────────────────────────────
+ * Xóa bỏ: district_manager, marketing_sale, auditor, hr_manager
+ * owner → Dashboard tổng hợp (home base)
+ * store_manager → Xem báo cáo store phụ trách
+ */
 export const officeRoleToBasePath = (roles?: string[]) => {
   const list = roles || [];
-  if (list.includes("admin") || list.includes("auditor")) return "/office/audit";
-  if (list.includes("district_manager")) return "/office/dm";
-  if (list.includes("marketing_sale")) return "/office/marketing";
-  if (list.includes("hr_manager")) return "/office/hr";
+  if (list.includes("owner") || list.includes("platform_admin")) return "/office/dashboard";
+  if (list.includes("store_manager")) return "/office/dashboard";
   return "/office";
 };
 

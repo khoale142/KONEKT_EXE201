@@ -1,8 +1,9 @@
-@import url("https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,600;0,700;1,400&family=DM+Sans:ital,opsz,wght@0,9..40,100..1000;1,9..40,100..1000&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;1,400&family=Cormorant+Garamond:ital,wght@0,400;0,600;0,700;1,400&display=swap");
 
 :root {
-  font-family: 'DM Sans', 'Segoe UI', Roboto, Arial, system-ui, sans-serif;
-  line-height: 1.6;
+  --font-sans: 'Be Vietnam Pro', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-family: var(--font-sans);
+  line-height: 1.5;
   font-weight: 400;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
@@ -15,35 +16,89 @@ html {
 }
 
 body {
-  font-family: inherit;
-  font-size: inherit;
-  line-height: inherit;
+  font-family: var(--font-sans);
+  font-size: 14px;
+  line-height: 1.5;
+  background: var(--cafe-cream);
+  color: var(--cafe-text);
 }
 
 button,
 input,
 select,
 textarea {
-  font-family: inherit;
+  font-family: var(--font-sans);
 }
 
-/* Bakery / Cafe theme - Olive, Cream, Brown */
+table {
+  font-family: var(--font-sans);
+}
+
+.text-right {
+  text-align: right !important;
+}
+
+.tabular-nums {
+  font-variant-numeric: tabular-nums !important;
+}
+
+/* ──────────────────────────────────────────────────────────────────────
+   KONEKT Brand Palette – Xanh rêu đậm (Dark Moss Green) & Kem nhẹ #F8F6F1
+   Tuân thủ PLAN-06: Đổi nền sang #F8F6F1 dịu mắt, đồng bộ typography.
+   ────────────────────────────────────────────────────────────────────── */
 :root,
 .cafe-theme {
-  --cafe-olive: #3d503c;
-  --cafe-olive-light: #4a5d4a;
-  --cafe-olive-dark: #2d3b2d;
-  --cafe-cream: #f5f0e8;
-  --cafe-cream-dark: #ebe5dc;
+  /* ── Xanh rêu thương hiệu (Primary / Brand #3D503C) ── */
+  --cafe-olive: #3D503C;
+  --cafe-olive-light: #50694F;
+  --cafe-olive-dark: #2A3B2A;
+  --cafe-olive-hover: #465B45;
+  --cafe-olive-muted: rgba(61, 80, 60, 0.12);
+
+  /* ── Kem nhẹ thanh lịch #F8F6F1 (thay thế màu vàng ố cũ) ── */
+  --cafe-cream: #F8F6F1;
+  --cafe-cream-dark: #E8E3DA;
+  --cafe-cream-light: #FCFBF9;
+  --cafe-white: #FFFFFF;
+
+  /* ── Accent / Brown ── */
   --cafe-brown: #6b5344;
   --cafe-brown-light: #8b7355;
   --cafe-brown-dark: #5a4538;
-  --cafe-text: #2c2c2c;
-  --cafe-text-muted: #6b6b6b;
-  --cafe-white: #faf8f5;
+
+  /* ── Text ── */
+  --cafe-text: #1E261F;
+  --cafe-text-muted: #5A685B;
+  --cafe-text-on-primary: #FFFFFF;
+
+  /* ── Semantic ── */
   --cafe-error: #c0392b;
   --cafe-success: #27ae60;
+  --cafe-warning: #e67e22;
+  --cafe-info: #2980b9;
+
+  /* ── Shadows & Borders ── */
+  --cafe-shadow-sm: 0 1px 3px rgba(45, 62, 47, 0.05);
+  --cafe-shadow-md: 0 4px 16px -2px rgba(45, 62, 47, 0.07), 0 2px 6px -1px rgba(0, 0, 0, 0.03);
+  --cafe-shadow-lg: 0 10px 28px -4px rgba(45, 62, 47, 0.10), 0 4px 10px -2px rgba(0, 0, 0, 0.04);
+  --cafe-border: #E8E3DA;
+  --cafe-border-light: rgba(232, 227, 218, 0.8);
+
+  /* ── Transition ── */
+  --cafe-transition: 200ms cubic-bezier(0.4, 0, 0.2, 1);
 }
+
+@keyframes navFlyoutFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-50%) translateX(-6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(-50%) translateX(0);
+  }
+}
+
 
 body {
   margin: 0;
@@ -51,7 +106,7 @@ body {
   min-height: 100vh;
   background: var(--cafe-cream);
   color: var(--cafe-text);
-  font-family: 'DM Sans', 'Segoe UI', Roboto, Arial, system-ui, sans-serif;
+  font-family: var(--font-sans);
 }
 
 a {
@@ -1658,3 +1713,25 @@ small.cafe-helper {
   background: #fff5e6 !important;
   color: var(--cafe-olive-dark) !important;
 }
+
+/* ── KONEKT Infinite Marquee Animation ── */
+@keyframes konektMarquee {
+  0% {
+    transform: translateX(0);
+  }
+  100% {
+    transform: translateX(-50%);
+  }
+}
+
+.konekt-marquee-track {
+  display: flex;
+  width: max-content;
+  animation: konektMarquee 35s linear infinite;
+  will-change: transform;
+}
+
+.konekt-marquee-track:hover {
+  animation-play-state: paused;
+}
+

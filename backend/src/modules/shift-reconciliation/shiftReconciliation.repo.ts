@@ -3,11 +3,35 @@ import { pool } from "../../config/db";
 export async function findOpenReconciliationByStore(storeId: number) {
   const r = await pool.query(
     `
-      SELECT *
-      FROM coffee_chain_db.pos_shift_reconciliations
-      WHERE store_id = $1
-        AND status = 'open'
-      ORDER BY started_at DESC
+      SELECT 
+        s.id,
+        s.store_id,
+        s.id AS shift_session_id,
+        TO_CHAR(s.opened_at, 'YYYY-MM-DD') AS work_date,
+        'A' AS shift_code,
+        s.opened_at AS scheduled_start_at,
+        s.opened_at + INTERVAL '16 hours' AS scheduled_end_at,
+        COALESCE(s.opening_cash, 0)::numeric AS opening_cash_amount,
+        COALESCE(s.expected_cash, 0)::numeric AS expected_cash_amount,
+        0::numeric AS expected_transfer_amount,
+        COALESCE(s.total_sales, 0)::numeric AS expected_total_amount,
+        s.closing_cash AS actual_cash_amount,
+        COALESCE(s.cash_difference, 0)::numeric AS variance_cash_amount,
+        COALESCE(s.total_orders, 0)::int AS total_orders,
+        0::int AS cash_order_count,
+        0::int AS transfer_order_count,
+        s.opened_at AS started_at,
+        s.closed_at,
+        s.user_id AS opened_by,
+        s.user_id AS closed_by,
+        s.status,
+        s.notes AS note,
+        s.opened_at AS created_at,
+        s.opened_at AS updated_at
+      FROM public.shift_sessions s
+      WHERE s.store_id = $1
+        AND s.status = 'open'
+      ORDER BY s.opened_at DESC
       LIMIT 1
     `,
     [storeId]
@@ -16,20 +40,60 @@ export async function findOpenReconciliationByStore(storeId: number) {
   return r.rows[0] || null;
 }
 
+export async function autoOpenDefaultShiftSession(storeId: number, userId?: number | null) {
+  const storeR = await pool.query(`SELECT id, tenant_id FROM public.stores WHERE id = $1 LIMIT 1`, [storeId]);
+  if (!storeR.rows[0]) return null;
+  const tenantId = storeR.rows[0].tenant_id;
+
+  await pool.query(
+    `
+      INSERT INTO public.shift_sessions (tenant_id, store_id, user_id, status, opening_cash, total_sales, total_orders, opened_at)
+      VALUES ($1, $2, $3, 'open', 0, 0, 0, NOW())
+    `,
+    [tenantId, storeId, userId || null]
+  );
+
+  return findOpenReconciliationByStore(storeId);
+}
+
 export async function getReconciliationById(params: {
   id: number;
   storeId?: number;
 }) {
   const values: any[] = [params.id];
   let sql = `
-    SELECT *
-    FROM coffee_chain_db.pos_shift_reconciliations
-    WHERE id = $1
+    SELECT 
+      s.id,
+      s.store_id,
+      s.id AS shift_session_id,
+      TO_CHAR(s.opened_at, 'YYYY-MM-DD') AS work_date,
+      'A' AS shift_code,
+      s.opened_at AS scheduled_start_at,
+      s.opened_at + INTERVAL '16 hours' AS scheduled_end_at,
+      COALESCE(s.opening_cash, 0)::numeric AS opening_cash_amount,
+      COALESCE(s.expected_cash, 0)::numeric AS expected_cash_amount,
+      0::numeric AS expected_transfer_amount,
+      COALESCE(s.total_sales, 0)::numeric AS expected_total_amount,
+      s.closing_cash AS actual_cash_amount,
+      COALESCE(s.cash_difference, 0)::numeric AS variance_cash_amount,
+      COALESCE(s.total_orders, 0)::int AS total_orders,
+      0::int AS cash_order_count,
+      0::int AS transfer_order_count,
+      s.opened_at AS started_at,
+      s.closed_at,
+      s.user_id AS opened_by,
+      s.user_id AS closed_by,
+      s.status,
+      s.notes AS note,
+      s.opened_at AS created_at,
+      s.opened_at AS updated_at
+    FROM public.shift_sessions s
+    WHERE s.id = $1
   `;
 
   if (params.storeId != null) {
     values.push(params.storeId);
-    sql += ` AND store_id = $2`;
+    sql += ` AND s.store_id = $2`;
   }
 
   sql += ` LIMIT 1`;
@@ -49,32 +113,45 @@ export async function createReconciliation(params: {
   openedBy?: number | null;
   note?: string | null;
 }) {
+  const storeR = await pool.query(`SELECT tenant_id FROM public.stores WHERE id = $1 LIMIT 1`, [params.storeId]);
+  const tenantId = storeR.rows[0]?.tenant_id || 1;
+
   const r = await pool.query(
     `
-      INSERT INTO coffee_chain_db.pos_shift_reconciliations(
+      INSERT INTO public.shift_sessions(
+        tenant_id,
         store_id,
-        shift_session_id,
-        work_date,
-        shift_code,
-        scheduled_start_at,
-        scheduled_end_at,
-        opening_cash_amount,
-        opened_by,
-        note
+        user_id,
+        status,
+        opening_cash,
+        notes,
+        opened_at
       )
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
-      RETURNING *
+      VALUES ($1, $2, $3, 'open', $4, $5, NOW())
+      RETURNING 
+        id,
+        store_id,
+        id AS shift_session_id,
+        $6::text AS work_date,
+        $7::text AS shift_code,
+        $8::timestamp with time zone AS scheduled_start_at,
+        $9::timestamp with time zone AS scheduled_end_at,
+        opening_cash AS opening_cash_amount,
+        user_id AS opened_by,
+        notes AS note,
+        opened_at AS started_at,
+        status
     `,
     [
+      tenantId,
       params.storeId,
-      params.shiftSessionId ?? null,
+      params.openedBy ?? null,
+      params.openingCashAmount,
+      params.note ?? null,
       params.workDate,
       params.shiftCode,
       params.scheduledStartAt,
       params.scheduledEndAt,
-      params.openingCashAmount,
-      params.openedBy ?? null,
-      params.note ?? null,
     ]
   );
 
@@ -96,35 +173,26 @@ export async function closeReconciliation(params: {
 }) {
   const r = await pool.query(
     `
-      UPDATE coffee_chain_db.pos_shift_reconciliations
+      UPDATE public.shift_sessions
       SET
-        closed_by = $2,
-        actual_cash_amount = $3,
-        expected_cash_amount = $4,
-        expected_transfer_amount = $5,
-        expected_total_amount = $6,
-        variance_cash_amount = $7,
-        total_orders = $8,
-        cash_order_count = $9,
-        transfer_order_count = $10,
-        note = COALESCE($11, note),
+        closing_cash = $2,
+        expected_cash = $3,
+        cash_difference = $4,
+        total_sales = $5,
+        total_orders = $6,
+        notes = COALESCE($7, notes),
         closed_at = NOW(),
-        status = 'closed',
-        updated_at = NOW()
+        status = 'closed'
       WHERE id = $1
       RETURNING *
     `,
     [
       params.id,
-      params.closedBy ?? null,
       params.actualCashAmount,
       params.expectedCashAmount,
-      params.expectedTransferAmount,
-      params.expectedTotalAmount,
       params.varianceCashAmount,
+      params.expectedTotalAmount,
       params.totalOrders,
-      params.cashOrderCount,
-      params.transferOrderCount,
       params.note ?? null,
     ]
   );
@@ -142,26 +210,11 @@ export async function listReconciliations(params: {
   offset?: number;
 }) {
   const values: any[] = [params.storeId];
-  const where: string[] = [`store_id = $1`];
-
-  if (params.dateFrom) {
-    values.push(params.dateFrom);
-    where.push(`work_date >= $${values.length}::date`);
-  }
-
-  if (params.dateTo) {
-    values.push(params.dateTo);
-    where.push(`work_date <= $${values.length}::date`);
-  }
+  const where: string[] = [`s.store_id = $1`];
 
   if (params.status) {
     values.push(params.status);
-    where.push(`status = $${values.length}`);
-  }
-
-  if (params.shiftCode) {
-    values.push(params.shiftCode);
-    where.push(`shift_code = $${values.length}`);
+    where.push(`s.status = $${values.length}`);
   }
 
   values.push(params.limit ?? 50);
@@ -172,10 +225,34 @@ export async function listReconciliations(params: {
 
   const r = await pool.query(
     `
-      SELECT *
-      FROM coffee_chain_db.pos_shift_reconciliations
+      SELECT 
+        s.id,
+        s.store_id,
+        s.id AS shift_session_id,
+        TO_CHAR(s.opened_at, 'YYYY-MM-DD') AS work_date,
+        'A' AS shift_code,
+        s.opened_at AS scheduled_start_at,
+        s.opened_at + INTERVAL '16 hours' AS scheduled_end_at,
+        COALESCE(s.opening_cash, 0)::numeric AS opening_cash_amount,
+        COALESCE(s.expected_cash, 0)::numeric AS expected_cash_amount,
+        0::numeric AS expected_transfer_amount,
+        COALESCE(s.total_sales, 0)::numeric AS expected_total_amount,
+        s.closing_cash AS actual_cash_amount,
+        COALESCE(s.cash_difference, 0)::numeric AS variance_cash_amount,
+        COALESCE(s.total_orders, 0)::int AS total_orders,
+        0::int AS cash_order_count,
+        0::int AS transfer_order_count,
+        s.opened_at AS started_at,
+        s.closed_at,
+        s.user_id AS opened_by,
+        s.user_id AS closed_by,
+        s.status,
+        s.notes AS note,
+        s.opened_at AS created_at,
+        s.opened_at AS updated_at
+      FROM public.shift_sessions s
       WHERE ${where.join(" AND ")}
-      ORDER BY started_at DESC, id DESC
+      ORDER BY s.opened_at DESC, s.id DESC
       LIMIT $${limitParam}
       OFFSET $${offsetParam}
     `,
@@ -185,31 +262,18 @@ export async function listReconciliations(params: {
   return r.rows;
 }
 
-export async function findOpenInventoryShiftSession(params: {
+export async function findOpenInventoryShiftSession(_params: {
   storeId: number;
   workDate: string;
-}) {
-  const r = await pool.query(
-    `
-      SELECT *
-      FROM coffee_chain_db.inventory_shift_sessions
-      WHERE store_id = $1
-        AND work_date = $2::date
-        AND status = 'open'
-      ORDER BY opened_at DESC, id DESC
-      LIMIT 1
-    `,
-    [params.storeId, params.workDate]
-  );
-
-  return r.rows[0] || null;
+}): Promise<any | null> {
+  return null;
 }
 
 export async function getStoreMeta(storeId: number) {
   const r = await pool.query(
     `
-      SELECT id, code, name, address
-      FROM coffee_chain_db.stores
+      SELECT id, COALESCE(invite_code, 'STORE-' || id) AS code, name, address
+      FROM public.stores
       WHERE id = $1
       LIMIT 1
     `,
@@ -228,136 +292,72 @@ export async function getReconciliationSummary(params: {
 
   if (params.storeId != null) {
     values.push(params.storeId);
-    storeFilter = ` AND pr.store_id = $2`;
+    storeFilter = ` AND s.store_id = $2`;
   }
 
   const r = await pool.query(
     `
       WITH base AS (
         SELECT
-          pr.id,
-          pr.store_id,
-          pr.work_date,
-          pr.opening_cash_amount,
-          pr.started_at,
-          COALESCE(pr.closed_at, NOW()) AS end_at
-        FROM coffee_chain_db.pos_shift_reconciliations pr
-        WHERE pr.id = $1
+          s.id,
+          s.store_id,
+          TO_CHAR(s.opened_at, 'YYYY-MM-DD') AS work_date,
+          COALESCE(s.opening_cash, 0)::numeric AS opening_cash_amount,
+          s.opened_at AS started_at,
+          COALESCE(s.closed_at, NOW()) AS end_at
+        FROM public.shift_sessions s
+        WHERE s.id = $1
         ${storeFilter}
       ),
 
       payments_agg AS (
         SELECT
           COALESCE(COUNT(DISTINCT o.id) FILTER (
-            WHERE op.method::text = 'cash'
-              AND o.id IS NOT NULL
-              AND COALESCE(o.order_type, 'NORMAL') = 'NORMAL'
+            WHERE p.method::text = 'cash' AND o.id IS NOT NULL
           ), 0)::int AS cash_order_count,
 
           COALESCE(COUNT(DISTINCT o.id) FILTER (
-            WHERE op.method::text = 'transfer'
-              AND o.id IS NOT NULL
-              AND COALESCE(o.order_type, 'NORMAL') = 'NORMAL'
+            WHERE p.method::text IN ('transfer', 'vietqr') AND o.id IS NOT NULL
           ), 0)::int AS transfer_order_count,
 
-          COALESCE(SUM(op.amount) FILTER (
-            WHERE op.method::text = 'cash'
-              AND o.id IS NOT NULL
-              AND COALESCE(o.order_type, 'NORMAL') = 'NORMAL'
+          COALESCE(SUM(p.amount) FILTER (
+            WHERE p.method::text = 'cash' AND o.id IS NOT NULL
           ), 0)::numeric AS cash_amount,
 
-          COALESCE(SUM(op.amount) FILTER (
-            WHERE op.method::text = 'transfer'
-              AND o.id IS NOT NULL
-              AND COALESCE(o.order_type, 'NORMAL') = 'NORMAL'
+          COALESCE(SUM(p.amount) FILTER (
+            WHERE p.method::text IN ('transfer', 'vietqr') AND o.id IS NOT NULL
           ), 0)::numeric AS transfer_amount,
 
-          COALESCE(SUM(op.amount) FILTER (
-            WHERE op.method::text NOT IN ('cash', 'transfer')
-              AND o.id IS NOT NULL
-              AND COALESCE(o.order_type, 'NORMAL') = 'NORMAL'
-          ), 0)::numeric AS other_amount,
-
-          COALESCE(COUNT(op.id) FILTER (
-            WHERE op.method::text NOT IN ('cash', 'transfer')
-              AND o.id IS NOT NULL
-              AND COALESCE(o.order_type, 'NORMAL') = 'NORMAL'
-          ), 0)::int AS other_payment_count
+          0::numeric AS other_amount,
+          0::int AS other_payment_count
         FROM base
-        LEFT JOIN coffee_chain_db.order_payments op
-          ON op.paid_at >= base.started_at
-         AND op.paid_at <= base.end_at
-        LEFT JOIN coffee_chain_db.orders o
-          ON o.id = op.order_id
-         AND o.store_id = base.store_id
-         AND o.status::text IN ('paid', 'completed')
+        LEFT JOIN public.orders o
+          ON o.store_id = base.store_id
+         AND o.created_at >= base.started_at
+         AND o.created_at <= base.end_at
+         AND o.status::text IN ('completed', 'ready', 'confirmed')
+        LEFT JOIN public.payments p
+          ON p.order_id = o.id
+         AND p.status::text = 'paid'
       ),
 
       orders_agg AS (
         SELECT
-          COALESCE(COUNT(*) FILTER (
-            WHERE o.status::text IN ('paid', 'completed')
-          ), 0)::int AS total_orders,
-
-          COALESCE(COUNT(*) FILTER (
-            WHERE o.status::text IN ('paid', 'completed')
-              AND COALESCE(o.order_type, 'NORMAL') = 'NORMAL'
-          ), 0)::int AS normal_order_count,
-
-          COALESCE(COUNT(*) FILTER (
-            WHERE o.status::text IN ('paid', 'completed')
-              AND COALESCE(o.order_type, 'NORMAL') <> 'NORMAL'
-          ), 0)::int AS special_order_count,
-
-          COALESCE(COUNT(*) FILTER (
-            WHERE o.status::text IN ('paid', 'completed')
-              AND COALESCE(o.order_type, 'NORMAL') = 'TEST'
-          ), 0)::int AS special_test_count,
-
-          COALESCE(COUNT(*) FILTER (
-            WHERE o.status::text IN ('paid', 'completed')
-              AND COALESCE(o.order_type, 'NORMAL') = 'FREE'
-          ), 0)::int AS special_free_count,
-
-          COALESCE(COUNT(*) FILTER (
-            WHERE o.status::text IN ('paid', 'completed')
-              AND COALESCE(o.order_type, 'NORMAL') = 'INTERNAL'
-          ), 0)::int AS special_internal_count,
-
-          COALESCE(COUNT(*) FILTER (
-            WHERE o.status::text IN ('paid', 'completed')
-              AND COALESCE(o.order_type, 'NORMAL') = 'GUEST'
-          ), 0)::int AS special_guest_count,
-
-          COALESCE(COUNT(*) FILTER (
-            WHERE o.status::text IN ('paid', 'completed')
-              AND COALESCE(o.order_type, 'NORMAL') = 'COMPENSATION'
-          ), 0)::int AS special_compensation_count,
-
-          COALESCE(SUM(o.subtotal_amount) FILTER (
-            WHERE o.status::text IN ('paid', 'completed')
-              AND COALESCE(o.order_type, 'NORMAL') <> 'NORMAL'
-          ), 0)::numeric AS special_value
+          COALESCE(COUNT(*), 0)::int AS total_orders,
+          COALESCE(COUNT(*), 0)::int AS normal_order_count,
+          0::int AS special_order_count,
+          0::int AS special_test_count,
+          0::int AS special_free_count,
+          0::int AS special_internal_count,
+          0::int AS special_guest_count,
+          0::int AS special_compensation_count,
+          0::numeric AS special_value
         FROM base
-        LEFT JOIN coffee_chain_db.orders o
+        LEFT JOIN public.orders o
           ON o.store_id = base.store_id
          AND o.created_at >= base.started_at
          AND o.created_at <= base.end_at
-      ),
-
-      item_agg AS (
-        SELECT
-          COALESCE(SUM(od.quantity) FILTER (
-            WHERE COALESCE(o.order_type, 'NORMAL') <> 'NORMAL'
-          ), 0)::int AS special_item_count
-        FROM base
-        LEFT JOIN coffee_chain_db.orders o
-          ON o.store_id = base.store_id
-         AND o.created_at >= base.started_at
-         AND o.created_at <= base.end_at
-         AND o.status::text IN ('paid', 'completed')
-        LEFT JOIN coffee_chain_db.order_details od
-          ON od.order_id = o.id
+         AND o.status::text IN ('completed', 'ready', 'confirmed')
       )
 
       SELECT
@@ -380,11 +380,10 @@ export async function getReconciliationSummary(params: {
         orders_agg.special_compensation_count,
         orders_agg.special_value,
 
-        item_agg.special_item_count
+        0::int AS special_item_count
       FROM base
       CROSS JOIN payments_agg
       CROSS JOIN orders_agg
-      CROSS JOIN item_agg
       GROUP BY
         payments_agg.cash_order_count,
         payments_agg.transfer_order_count,
@@ -400,8 +399,7 @@ export async function getReconciliationSummary(params: {
         orders_agg.special_internal_count,
         orders_agg.special_guest_count,
         orders_agg.special_compensation_count,
-        orders_agg.special_value,
-        item_agg.special_item_count
+        orders_agg.special_value
     `,
     values
   );
@@ -418,43 +416,42 @@ export async function getReconciliationPayments(params: {
 
   if (params.storeId != null) {
     values.push(params.storeId);
-    storeFilter = ` AND pr.store_id = $2`;
+    storeFilter = ` AND s.store_id = $2`;
   }
 
   const r = await pool.query(
     `
       WITH base AS (
         SELECT
-          pr.id,
-          pr.store_id,
-          pr.started_at,
-          COALESCE(pr.closed_at, NOW()) AS end_at
-        FROM coffee_chain_db.pos_shift_reconciliations pr
-        WHERE pr.id = $1
+          s.id,
+          s.store_id,
+          s.opened_at AS started_at,
+          COALESCE(s.closed_at, NOW()) AS end_at
+        FROM public.shift_sessions s
+        WHERE s.id = $1
         ${storeFilter}
       )
       SELECT
-        op.id,
-        op.order_id,
-        op.method::text AS method,
-        op.amount,
-        op.reference_code,
-        op.paid_at,
+        p.id,
+        p.order_id,
+        p.method::text AS method,
+        p.amount,
+        p.transaction_ref AS reference_code,
+        p.paid_at,
 
         o.order_code,
         o.status::text AS order_status,
-        o.pickup_number,
-        o.final_amount,
-        o.staff_id
+        o.id AS pickup_number,
+        o.total_amount AS final_amount,
+        o.cashier_id AS staff_id
       FROM base
-      JOIN coffee_chain_db.order_payments op
-        ON op.paid_at >= base.started_at
-       AND op.paid_at <= base.end_at
-      JOIN coffee_chain_db.orders o
-        ON o.id = op.order_id
-       AND o.store_id = base.store_id
-       AND o.status::text IN ('paid', 'completed')
-      ORDER BY op.paid_at DESC, op.id DESC
+      JOIN public.orders o
+        ON o.store_id = base.store_id
+       AND o.created_at >= base.started_at
+       AND o.created_at <= base.end_at
+      JOIN public.payments p
+        ON p.order_id = o.id
+      ORDER BY p.paid_at DESC, p.id DESC
     `,
     values
   );
@@ -462,53 +459,9 @@ export async function getReconciliationPayments(params: {
   return r.rows;
 }
 
-export async function getReconciliationSpecialOrders(params: {
+export async function getReconciliationSpecialOrders(_params: {
   reconciliationId: number;
   storeId?: number;
-}) {
-  const values: any[] = [params.reconciliationId];
-  let storeFilter = "";
-
-  if (params.storeId != null) {
-    values.push(params.storeId);
-    storeFilter = ` AND pr.store_id = $2`;
-  }
-
-  const r = await pool.query(
-    `
-      WITH base AS (
-        SELECT
-          pr.id,
-          pr.store_id,
-          pr.started_at,
-          COALESCE(pr.closed_at, NOW()) AS end_at
-        FROM coffee_chain_db.pos_shift_reconciliations pr
-        WHERE pr.id = $1
-        ${storeFilter}
-      )
-      SELECT
-        o.id,
-        o.order_code,
-        o.status::text AS order_status,
-        o.pickup_number,
-        o.staff_id,
-        o.created_at,
-        o.completed_at,
-        o.subtotal_amount,
-        o.final_amount,
-        COALESCE(o.order_type, 'NORMAL')::text AS order_type,
-        o.special_note
-      FROM base
-      JOIN coffee_chain_db.orders o
-        ON o.store_id = base.store_id
-       AND o.created_at >= base.started_at
-       AND o.created_at <= base.end_at
-       AND o.status::text IN ('paid', 'completed')
-       AND COALESCE(o.order_type, 'NORMAL') <> 'NORMAL'
-      ORDER BY o.created_at DESC, o.id DESC
-    `,
-    values
-  );
-
-  return r.rows;
+}): Promise<any[]> {
+  return [];
 }

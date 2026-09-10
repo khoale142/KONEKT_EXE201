@@ -63,7 +63,7 @@ export async function getPaymentStatus(orderId: number) {
 
   const payment = await findLatestPaymentByOrderId(orderId);
   const status =
-    order.status === "paid" || order.status === "completed"
+    (order.status as string) === "paid" || order.status === "completed"
       ? "PAID"
       : payment?.status ?? "PENDING";
 

@@ -1,4 +1,4 @@
-﻿import {
+import {
   createBrowserRouter,
   RouterProvider,
   Link,
@@ -13,6 +13,7 @@ import { useAuthStore } from "../../app/store/auth.store";
 import PortalSelectPage from "../../features/auth/pages/PortalSelectPage";
 import CustomerLoginPage from "../../features/auth/pages/CustomerLoginPage";
 import CustomerRegisterPage from "../../features/auth/pages/CustomerRegisterPage";
+import OwnerRegisterPage from "../../features/auth/pages/OwnerRegisterPage";
 import CustomerForgotPasswordPage from "../../features/auth/pages/CustomerForgotPasswordPage";
 import CustomerResetOtpPage from "../../features/auth/pages/CustomerResetOtpPage";
 import CustomerResetPasswordPage from "../../features/auth/pages/CustomerResetPasswordPage";
@@ -24,6 +25,13 @@ import StoreBranchSelectPage from "../../features/auth/pages/StoreBranchSelectPa
 import OfficeLoginPage from "../../features/auth/pages/OfficeLoginPage";
 import OfficeBranchSelectPage from "../../features/auth/pages/OfficeBranchSelectPage";
 import PosLoginPage from "../../features/auth/pages/PosLoginPage";
+import MerchantLoginPage from "../../features/auth/pages/MerchantLoginPage";
+import SelectTenantPage from "../../features/workspace/pages/SelectTenantPage";
+import SelectStorePage from "../../features/workspace/pages/SelectStorePage";
+import OwnerMenuHubPage from "../../features/owner-menu/pages/OwnerMenuHubPage";
+import OwnerInventoryHubPage from "../../features/owner-inventory/pages/OwnerInventoryHubPage";
+import OwnerPromotionsHubPage from "../../features/owner-promotions/pages/OwnerPromotionsHubPage";
+import OwnerHRHubPage from "../../features/office/hr/pages/OwnerHRHubPage";
 
 import AuthLayout from "../../shared/layouts/AuthLayout";
 import StoreLayout from "../../shared/layouts/StoreLayout";
@@ -39,19 +47,15 @@ import RequireRole from "./guards/RequireRole";
 import DashboardPage from "../../features/head-officer/pages/DashboardPage";
 import RevenueReportPage from "../../features/head-officer/pages/RevenueReportPage";
 import PayrollReportPage from "../../features/head-officer/pages/PayrollReportPage";
-import InventoryWastePage, { InventoryOverviewTab } from "../../features/head-officer/pages/InventoryWastePage";
-import ComplaintsPage from "../../features/head-officer/pages/ComplaintsPage";
 
 // Marketing pages
 import DiscoverPage from "../../features/marketing/pages/DiscoverPage.tsx";
 import MarketingContentDetailPage from "../../features/marketing/pages/MarketingContentDetailPage.tsx";
 import MarketingContentEditorPage from "../../features/marketing/pages/MarketingContentEditorPage.tsx";
 import MarketingContentsPage from "../../features/marketing/pages/MarketingContentsPage.tsx";
-import VouchersPage from "../../features/marketing/pages/VouchersPage";
 import MarketingComplaintsPage from "../../features/marketing/pages/MarketingComplaintsPage";
 import MarketingComboRuleListPage from "../../features/marketing/pages/MarketingComboRuleListPage";
 import MarketingComboRuleEditorPage from "../../features/marketing/pages/MarketingComboRuleEditorPage";
-
 
 // Audit pages
 import StoreDataPage from "../../features/audit/pages/StoreDataPage";
@@ -59,11 +63,9 @@ import AuditFlagsPage from "../../features/audit/pages/AuditFlagsPage";
 import AuditReportsPage from "../../features/audit/pages/AuditReportsPage";
 import RequireStoreRole from "./guards/RequireStoreRole";
 import InventoryAuditApprovalPage from "../../features/head-officer/pages/InventoryAuditApprovalPage";
-import InventoryReceiptReportPage from "../../features/head-officer/pages/InventoryReceiptReportPage";
 import StoreDisposalReportCreatePage from "../../features/staff/pages/StoreDisposalReportCreatePage";
 import MyDisposalReportsPage from "../../features/staff/pages/MyDisposalReportsPage";
 import StoreDisposalManagerPage from "../../features/staff/pages/StoreDisposalManagerPage";
-import DisposalOrderApprovalPage from "../../features/head-officer/pages/DisposalOrderApprovalPage";
 import DisposalOrderApprovalHistoryPage from "../../features/head-officer/pages/DisposalOrderApprovalHistoryPage";
 import StoreDisposalOrdersHistoryPage from "../../features/staff/pages/StoreDisposalOrdersHistoryPage";
 import StoreDisposalOrderDetailPage from "../../features/staff/pages/StoreDisposalOrderDetailPage";
@@ -71,13 +73,8 @@ import StoreDisposalReportActionPage from "../../features/staff/pages/StoreDispo
 import DisposalReportExplainPage from "../../features/staff/pages/DisposalReportExplainPage";
 import DisposalOrderApprovalDetailPage from "../../features/head-officer/pages/DisposalOrderApprovalDetailPage";
 
-import HRDashboardPage from "../../features/office/hr/pages/HRDashboardWorkspaceV2Page";
-import HRProfileRequestsPage from "../../features/office/hr/pages/HRProfileRequestsWorkspaceV2Page";
-import HRProfileRequestDetailPage from "../../features/office/hr/pages/HRProfileRequestDetailWorkspaceV2Page";
-import HREmployeesPage from "../../features/office/hr/pages/HREmployeesPage";
 import HREmployeeDetailPage from "../../features/office/hr/pages/HREmployeeDetailWorkspacePage";
 import HRAttendancePage from "../../features/office/hr/pages/HRAttendanceWorkspaceV2Page";
-import HRRequestsIndexPage from "../../features/office/hr/pages/HRRequestsWorkspacePage";
 import HRRoleUpdateRequestsPage from "../../features/office/hr/pages/HRRoleUpdateRequestsPage";
 import HRStaffingRequestsPage from "../../features/office/hr/pages/HRStaffingRequestsPage";
 import HRSchedulesPage from "../../features/office/hr/pages/HRSchedulesWorkspaceV2Page";
@@ -86,11 +83,8 @@ import PosOrderPage from "../../features/pos/pages/PosOrderPage";
 import PosKdsViewPage from "../../features/pos/pages/PosKdsViewPage";
 import PosHeldOrdersPage from "../../features/pos/pages/PosHeldOrdersPage";
 import PosPaidOrdersPage from "../../features/pos/pages/PosPaidOrdersPage";
-import PosDashboardPage from "../../features/pos/pages/PosDashboardPage";
+import PosWorkspaceLayout from "../../features/pos/layouts/PosWorkspaceLayout";
 import PosStoreReportPage from "../../features/pos/pages/PosStoreReportPage";
-import PosPickupSelectPage from "../../features/pos/pages/PosPickupSelectPage";
-import PosOnlineOrdersConfirmPage from "../../features/pos/pages/PosOnlineOrdersConfirmPage";
-import PosOrderIssuesPage from "../../features/pos/pages/PosOrderIssuesPage";
 import CustomerChatPage from "../../features/chat/pages/CustomerChatPage";
 import CustomerHomePage from "../../features/customer/pages/CustomerHomePage";
 import ChatButton from "../../shared/components/ChatButton";
@@ -101,7 +95,6 @@ import PosShiftReconciliationPage from "../../features/pos/pages/PosShiftReconci
 import StoreDetailPage from "../../features/stores/pages/StoreDetailPage";
 import CustomerCompleteAccountPage from "../../features/auth/pages/CustomerCompleteAccountPage";
 import PublicPickupBoardPage from "../../features/public/pages/PublicPickupBoardPage";
-import PosCustomerPreviewPage from "../../features/pos/pages/PosCustomerPreviewPage.tsx";
 import MarketingMenuListPage from "../../features/marketing/pages/MarketingMenuListPage";
 import MarketingMenuEditorPage from "../../features/marketing/pages/MarketingMenuEditorPage";
 
@@ -298,12 +291,32 @@ const router = createBrowserRouter([
   },
 
   {
+    path: "/workspace/select-tenant",
+    element: <SelectTenantPage />,
+  },
+  {
+    path: "/workspace/select-store",
+    element: <SelectStorePage />,
+  },
+  {
+    path: "/login",
+    element: <MerchantLoginPage />,
+  },
+  {
+    path: "/login/merchant",
+    element: <Navigate to="/login" replace />,
+  },
+  {
     path: "/login/customer",
     element: (
       <AuthLayout>
         <CustomerLoginPage />
       </AuthLayout>
     ),
+  },
+  {
+    path: "/register/owner",
+    element: <OwnerRegisterPage />,
   },
   {
     path: "/register/customer",
@@ -1068,11 +1081,27 @@ const router = createBrowserRouter([
     ),
   },
 
-  // Office / Head Officer zone — role district_manager, admin
+  // Office / Head Officer zone — role district_manager, admin, owner
   // OFFICE
   {
     path: "/office",
-    element: <Navigate to="/login/office" replace />,
+    element: (
+      <RequirePortal portal="OFFICE">
+        <OfficeLayout>
+          <OfficeLanding />
+        </OfficeLayout>
+      </RequirePortal>
+    ),
+  },
+  {
+    path: "/office/dashboard",
+    element: (
+      <RequirePortal portal="OFFICE">
+        <OfficeLayout>
+          <DashboardPage />
+        </OfficeLayout>
+      </RequirePortal>
+    ),
   },
   {
     path: "/office/audit",
@@ -1155,59 +1184,66 @@ const router = createBrowserRouter([
       </RequirePortal>
     ),
   },
+  // ── Unified Hub 1: Menu & BOM Hub ──
+  {
+    path: "/office/menu",
+    element: (
+      <RequirePortal portal="OFFICE">
+        <OfficeLayout>
+          <OwnerMenuHubPage />
+        </OfficeLayout>
+      </RequirePortal>
+    ),
+  },
+  { path: "/office/menu/products", element: <Navigate to="/office/menu?tab=products" replace /> },
+  { path: "/office/menu/recipes", element: <Navigate to="/office/menu?tab=recipes" replace /> },
+  { path: "/office/menu/categories", element: <Navigate to="/office/menu?tab=categories" replace /> },
+
+  // ── Unified Hub 2: Inventory & Supplies Hub ──
+  {
+    path: "/office/inventory",
+    element: (
+      <RequirePortal portal="OFFICE">
+        <OfficeLayout>
+          <OwnerInventoryHubPage />
+        </OfficeLayout>
+      </RequirePortal>
+    ),
+  },
+
+  // ── Unified Hub 3: Promotions & Offers Hub ──
+  {
+    path: "/office/promotions",
+    element: (
+      <RequirePortal portal="OFFICE">
+        <OfficeLayout>
+          <OwnerPromotionsHubPage />
+        </OfficeLayout>
+      </RequirePortal>
+    ),
+  },
+
+  // ── Unified Hub 4: HR Management Hub ──
   {
     path: "/office/hr",
     element: (
       <RequirePortal portal="OFFICE">
-        <RequireRole allowedRoles={["hr_manager", "admin"]}>
-          <OfficeLayout>
-            <HRDashboardPage />
-          </OfficeLayout>
-        </RequireRole>
+        <OfficeLayout>
+          <OwnerHRHubPage />
+        </OfficeLayout>
       </RequirePortal>
     ),
   },
-  {
-    path: "/office/hr/profile-requests",
-    element: (
-      <RequirePortal portal="OFFICE">
-        <RequireRole allowedRoles={["hr_manager", "admin"]}>
-          <OfficeLayout>
-            <HRProfileRequestsPage />
-          </OfficeLayout>
-        </RequireRole>
-      </RequirePortal>
-    ),
-  },
-  {
-    path: "/office/hr/profile-requests/:id",
-    element: (
-      <RequirePortal portal="OFFICE">
-        <RequireRole allowedRoles={["hr_manager", "admin"]}>
-          <OfficeLayout>
-            <HRProfileRequestDetailPage />
-          </OfficeLayout>
-        </RequireRole>
-      </RequirePortal>
-    ),
-  },
-  {
-    path: "/office/hr/employees",
-    element: (
-      <RequirePortal portal="OFFICE">
-        <RequireRole allowedRoles={["hr_manager", "admin"]}>
-          <OfficeLayout>
-            <HREmployeesPage />
-          </OfficeLayout>
-        </RequireRole>
-      </RequirePortal>
-    ),
-  },
+  { path: "/office/hr/staff-requests", element: <Navigate to="/office/hr?tab=requests" replace /> },
+  { path: "/office/hr/requests", element: <Navigate to="/office/hr?tab=requests" replace /> },
+  { path: "/office/hr/requests/staffing", element: <Navigate to="/office/hr?tab=requests" replace /> },
+  { path: "/office/hr/requests/role-updates", element: <Navigate to="/office/hr?tab=requests" replace /> },
+  { path: "/office/hr/employees", element: <Navigate to="/office/hr?tab=employees" replace /> },
   {
     path: "/office/hr/employees/:id",
     element: (
       <RequirePortal portal="OFFICE">
-        <RequireRole allowedRoles={["hr_manager", "admin"]}>
+        <RequireRole allowedRoles={["hr_manager", "admin", "owner"]}>
           <OfficeLayout>
             <HREmployeeDetailPage />
           </OfficeLayout>
@@ -1215,30 +1251,11 @@ const router = createBrowserRouter([
       </RequirePortal>
     ),
   },
-  {
-    path: "/office/hr/payroll",
-    element: (
-      <RequirePortal portal="OFFICE">
-        <RequireRole allowedRoles={["hr_manager", "admin"]}>
-          <OfficeLayout>
-            <PayrollReportPage />
-          </OfficeLayout>
-        </RequireRole>
-      </RequirePortal>
-    ),
-  },
-  {
-    path: "/office/hr/requests",
-    element: (
-      <RequirePortal portal="OFFICE">
-        <RequireRole allowedRoles={["hr_manager", "admin"]}>
-          <OfficeLayout>
-            <HRRequestsIndexPage />
-          </OfficeLayout>
-        </RequireRole>
-      </RequirePortal>
-    ),
-  },
+  { path: "/office/hr/payroll", element: <Navigate to="/office/hr?tab=payroll" replace /> },
+  { path: "/office/hr/schedules", element: <Navigate to="/office/hr?tab=schedules" replace /> },
+  { path: "/office/hr/attendance", element: <Navigate to="/office/hr?tab=attendance" replace /> },
+  { path: "/office/hr/profile-requests", element: <Navigate to="/office/hr?tab=employees" replace /> },
+  { path: "/office/hr/profile-requests/:id", element: <Navigate to="/office/hr?tab=employees" replace /> },
   {
     path: "/store/inventory/store-manager-approval",
     element: (
@@ -1299,37 +1316,10 @@ const router = createBrowserRouter([
       </RequirePortal>
     ),
   },
-  { path: "/office/inventory-waste", element: <Navigate to="/office/dm/inventory-waste" replace /> },
-  {
-    path: "/office/dm/inventory-waste",
-    element: (
-      <RequirePortal portal="OFFICE">
-        <RequireRole allowedRoles={["district_manager", "admin"]}>
-          <OfficeLayout>
-            <InventoryWastePage />
-          </OfficeLayout>
-        </RequireRole>
-      </RequirePortal>
-    ),
-    children: [
-      { index: true, element: <Navigate to="overview" replace /> },
-      { path: "overview", element: <InventoryOverviewTab /> },
-      { path: "receipts", element: <InventoryReceiptReportPage isEmbedded /> },
-      { path: "disposals", element: <DisposalOrderApprovalPage isEmbedded /> },
-    ],
-  },
-  {
-    path: "/office/complaints",
-    element: (
-      <RequirePortal portal="OFFICE">
-        <RequireRole allowedRoles={["district_manager", "admin"]}>
-          <OfficeLayout>
-            <ComplaintsPage />
-          </OfficeLayout>
-        </RequireRole>
-      </RequirePortal>
-    ),
-  },
+  { path: "/office/inventory-waste", element: <Navigate to="/office/inventory?tab=waste" replace /> },
+  { path: "/office/dm/inventory-waste", element: <Navigate to="/office/inventory?tab=waste" replace /> },
+  { path: "/office/dm/inventory-shift", element: <Navigate to="/office/inventory?tab=shifts" replace /> },
+  { path: "/office/complaints", element: <Navigate to="/office/dashboard" replace /> },
   {
     path: "/pos/held-orders",
     element: (
@@ -1458,52 +1448,11 @@ const router = createBrowserRouter([
       </RequirePortal>
     ),
   },
-  {
-    path: "/office/marketing/vouchers",
-    element: (
-      <RequirePortal portal="OFFICE">
-        <RequireRole allowedRoles={["marketing_sale", "admin"]}>
-          <Navigate to="/office/marketing/point-vouchers" replace />
-        </RequireRole>
-      </RequirePortal>
-    ),
-  },
-  {
-    path: "/office/marketing/promotions",
-    element: (
-      <RequirePortal portal="OFFICE">
-        <RequireRole allowedRoles={["marketing_sale", "admin"]}>
-          <OfficeLayout>
-            <VouchersPage />
-          </OfficeLayout>
-        </RequireRole>
-      </RequirePortal>
-    ),
-  },
-  {
-    path: "/office/marketing/point-vouchers",
-    element: (
-      <RequirePortal portal="OFFICE">
-        <RequireRole allowedRoles={["marketing_sale", "admin"]}>
-          <OfficeLayout>
-            <VouchersPage />
-          </OfficeLayout>
-        </RequireRole>
-      </RequirePortal>
-    ),
-  },
-  {
-    path: "/office/marketing/stamp-vouchers",
-    element: (
-      <RequirePortal portal="OFFICE">
-        <RequireRole allowedRoles={["marketing_sale", "admin"]}>
-          <OfficeLayout>
-            <VouchersPage />
-          </OfficeLayout>
-        </RequireRole>
-      </RequirePortal>
-    ),
-  },
+  { path: "/office/marketing/combos", element: <Navigate to="/office/promotions?tab=combos" replace /> },
+  { path: "/office/marketing/vouchers", element: <Navigate to="/office/promotions?tab=vouchers" replace /> },
+  { path: "/office/marketing/promotions", element: <Navigate to="/office/promotions?tab=vouchers" replace /> },
+  { path: "/office/marketing/point-vouchers", element: <Navigate to="/office/promotions?tab=vouchers" replace /> },
+  { path: "/office/marketing/stamp-vouchers", element: <Navigate to="/office/promotions?tab=vouchers" replace /> },
   {
     path: "/office/marketing/complaints",
     element: (
@@ -1555,94 +1504,62 @@ const router = createBrowserRouter([
       </RequirePortal>
     ),
   },
-  // POS zone
+  // POS zone (Web POS App Shell Layout)
   {
     path: "/pos",
     element: (
       <RequirePortal portal="POS">
         <PosViewportGuard>
-          <PosDashboardPage />
+          <PosWorkspaceLayout />
         </PosViewportGuard>
       </RequirePortal>
     ),
-  },
-  {
-    path: "/pos/order",
-    element: (
-      <RequirePortal portal="POS">
-        <PosViewportGuard>
-          <PosOrderPage />
-        </PosViewportGuard>
-      </RequirePortal>
-    ),
-  },
-  {
-    path: "/pos/kds",
-    element: (
-      <RequirePortal portal="POS">
-        <PosViewportGuard>
-          <PosKdsViewPage />
-        </PosViewportGuard>
-      </RequirePortal>
-    ),
-  },
-  {
-    path: "/pos/pickup",
-    element: (
-      <RequirePortal portal="POS">
-        <PosViewportGuard>
-          <PosPickupSelectPage />
-        </PosViewportGuard>
-      </RequirePortal>
-    ),
-  },
-  {
-    path: "/pos/online-orders",
-    element: (
-      <RequirePortal portal="POS">
-        <PosViewportGuard>
-          <PosOnlineOrdersConfirmPage />
-        </PosViewportGuard>
-      </RequirePortal>
-    ),
-  },
-  {
-    path: "/pos/issues",
-    element: (
-      <RequirePortal portal="POS">
-        <PosViewportGuard>
-          <PosOrderIssuesPage />
-        </PosViewportGuard>
-      </RequirePortal>
-    ),
-  },
-  {
-    path: "/pos/customer-preview",
-    element: (
-      <RequirePortal portal="POS">
-        <PosCustomerPreviewPage />
-      </RequirePortal>
-    ),
-  },
-  {
-    path: "/pos/report",
-    element: (
-      <RequirePortal portal="POS">
-        <PosViewportGuard>
-          <PosStoreReportPage />
-        </PosViewportGuard>
-      </RequirePortal>
-    ),
-  },
-  {
-    path: "/pos/shift-reconciliation",
-    element: (
-      <RequirePortal portal="POS">
-        <PosViewportGuard>
-          <PosShiftReconciliationPage />
-        </PosViewportGuard>
-      </RequirePortal>
-    ),
+    children: [
+      {
+        index: true,
+        element: <PosOrderPage />,
+      },
+      {
+        path: "order",
+        element: <PosOrderPage />,
+      },
+      {
+        path: "held",
+        element: <PosHeldOrdersPage />,
+      },
+      {
+        path: "held-orders",
+        element: <Navigate to="/pos/held" replace />,
+      },
+      {
+        path: "orders",
+        element: <PosPaidOrdersPage />,
+      },
+      {
+        path: "paid-orders",
+        element: <Navigate to="/pos/orders" replace />,
+      },
+      {
+        path: "kds",
+        element: <PosKdsViewPage />,
+      },
+      {
+        path: "shift",
+        element: <PosShiftReconciliationPage />,
+      },
+      {
+        path: "shift-reconciliation",
+        element: <Navigate to="/pos/shift" replace />,
+      },
+      {
+        path: "report",
+        element: <PosStoreReportPage />,
+      },
+      {
+        path: "pickup",
+        element: <Navigate to="/pos" replace />,
+      },
+    ],
   },
   {
     path: "/pickup-board/:storeId",
