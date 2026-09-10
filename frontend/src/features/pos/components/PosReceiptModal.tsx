@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { Printer, CheckCircle2, ArrowRight, X } from "lucide-react";
+import { Printer, CheckCircle2, ArrowRight, X, Wifi } from "lucide-react";
 import type { PosSettingsData } from "./PosSettingsModal";
 
 export interface ReceiptOrderData {
@@ -140,13 +140,13 @@ export default function PosReceiptModal({
           width: "100%",
           maxWidth: isSmall58 ? "420px" : "460px",
           maxHeight: "92vh",
-          backgroundColor: "#FAF8F5",
+          backgroundColor: "#FAF7F2",
           borderRadius: "20px",
           boxShadow: "0 24px 60px rgba(0, 0, 0, 0.35)",
           display: "flex",
           flexDirection: "column",
           overflow: "hidden",
-          border: "1px solid #DFD9CE",
+          border: "1px solid #DFD6C7",
         }}
       >
         {/* Header Thông báo thanh toán thành công (no-print) */}
@@ -358,8 +358,9 @@ export default function PosReceiptModal({
             {/* Chân Bill: Wi-Fi & Lời cảm ơn */}
             <div style={{ borderTop: "1px dashed #64748B", margin: "8px 0" }} />
             {(config.wifiSsid || config.wifiPassword) && (
-              <div style={{ textAlign: "center", fontSize: "11px", margin: "4px 0" }}>
-                📶 Wi-Fi: <b>{config.wifiSsid || "Free"}</b> | Pass: <b>{config.wifiPassword || "None"}</b>
+              <div style={{ textAlign: "center", fontSize: "11px", margin: "4px 0", display: "flex", alignItems: "center", justifyContent: "center", gap: 4 }}>
+                <Wifi size={12} />
+                <span>Wi-Fi: <b>{config.wifiSsid || "Free"}</b> | Pass: <b>{config.wifiPassword || "None"}</b></span>
               </div>
             )}
             <div style={{ textAlign: "center", fontSize: "11px", fontStyle: "italic", marginTop: "4px" }}>
@@ -377,7 +378,7 @@ export default function PosReceiptModal({
           style={{
             padding: "14px 20px",
             backgroundColor: "#FAF8F5",
-            borderTop: "1px solid #DFD9CE",
+            borderTop: "1px solid #DFD6C7",
             display: "flex",
             alignItems: "center",
             justifyContent: "space-between",
@@ -391,9 +392,9 @@ export default function PosReceiptModal({
               gap: "8px",
               padding: "10px 18px",
               borderRadius: "10px",
-              border: "1px solid #2D3E2F",
-              backgroundColor: "#FFFFFF",
-              color: "#2D3E2F",
+              border: "1px solid #3D5E46",
+              backgroundColor: "#FAF7F2",
+              color: "#3D5E46",
               fontSize: "13px",
               fontWeight: 700,
               cursor: "pointer",
@@ -412,12 +413,12 @@ export default function PosReceiptModal({
               padding: "10px 22px",
               borderRadius: "10px",
               border: "none",
-              backgroundColor: "#2D3E2F",
+              backgroundColor: "#3D5E46",
               color: "#FFFFFF",
               fontSize: "13px",
               fontWeight: 700,
               cursor: "pointer",
-              boxShadow: "0 2px 6px rgba(45, 62, 47, 0.3)",
+              boxShadow: "0 2px 6px rgba(61, 94, 70, 0.3)",
             }}
           >
             <span>Tạo Đơn Mới</span>

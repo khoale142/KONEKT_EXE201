@@ -8,13 +8,21 @@ import {
   Percent,
   Wifi,
   Plus,
+  Armchair,
+  Tag,
+  Hash,
+  User,
+  Zap,
+  Banknote,
+  QrCode,
+  type LucideIcon,
 } from "lucide-react";
 import { posGetStoreConfig, posUpdateStoreConfig } from "../api/orders.api";
 
 export interface PosSettingsData {
   defaultOrderType: string;
   defaultServiceMode: string;
-  enabledServiceModes: string[];
+  enabledServiceModes?: string[];
   autoPrintReceipt: boolean;
   storeDisplayName: string;
   receiptAddress: string;
@@ -24,6 +32,7 @@ export interface PosSettingsData {
   wifiSsid: string;
   wifiPassword: string;
   quickTables: string[];
+  quickMarkers?: string[];
   quickDiscounts: number[];
   defaultPaymentMethod: "cash" | "transfer";
   printCashierName: boolean;
@@ -42,41 +51,49 @@ export const DEFAULT_SETTINGS: PosSettingsData = {
   wifiSsid: "Konekt_Guest",
   wifiPassword: "konektcoffee",
   quickTables: ["Bàn 1", "Bàn 2", "Bàn 3", "Bàn 4", "Bàn 5", "Bàn 6", "Bàn 7", "Bàn 8", "VIP 1", "Sân Thượng"],
+  quickMarkers: ["Thẻ 01", "Thẻ 02", "Thẻ 03", "Thẻ 04", "Thẻ 05", "Thẻ 06", "Thẻ 07", "Thẻ 08", "Thẻ 09", "Thẻ 10"],
   quickDiscounts: [5, 10, 15, 20, 50, 100],
   defaultPaymentMethod: "cash",
   printCashierName: true,
 };
 
-export const SERVICE_MODE_OPTIONS = [
+export interface ServiceModeOption {
+  id: string;
+  label: string;
+  desc: string;
+  Icon: LucideIcon;
+}
+
+export const SERVICE_MODE_OPTIONS: ServiceModeOption[] = [
   {
     id: "table",
     label: "Số Bàn",
     desc: "Quán cafe, nhà hàng, quán ăn ngồi tại chỗ",
-    icon: "🪑",
+    Icon: Armchair,
   },
   {
     id: "table_marker",
     label: "Thẻ Số Để Bàn",
     desc: "Trà sữa, thức ăn nhanh mang số thẻ ra bàn",
-    icon: "🏷️",
+    Icon: Tag,
   },
   {
     id: "queue_number",
     label: "Số Thứ Tự (STT)",
     desc: "Tự động nhảy số tăng dần theo ngày in trên bill",
-    icon: "🔢",
+    Icon: Hash,
   },
   {
     id: "customer_name",
     label: "Tên & SĐT Khách",
     desc: "Tiệm bánh, tiệm trà takeaway, spa, dịch vụ",
-    icon: "👤",
+    Icon: User,
   },
   {
     id: "none",
     label: "Bán Nhanh Tại Quầy",
     desc: "Bán lẻ, tạp hóa, phụ kiện lấy đồ ngay",
-    icon: "⚡",
+    Icon: Zap,
   },
 ];
 
@@ -96,6 +113,7 @@ export default function PosSettingsModal({
   const [saving, setSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [newTableInput, setNewTableInput] = useState("");
+  const [newMarkerInput, setNewMarkerInput] = useState("");
   const [newDiscountInput, setNewDiscountInput] = useState("");
 
   useEffect(() => {
@@ -131,6 +149,9 @@ export default function PosSettingsModal({
             quickTables: Array.isArray(res.config.quickTables) && res.config.quickTables.length > 0
               ? res.config.quickTables
               : DEFAULT_SETTINGS.quickTables,
+            quickMarkers: Array.isArray(res.config.quickMarkers) && res.config.quickMarkers.length > 0
+              ? res.config.quickMarkers
+              : (DEFAULT_SETTINGS.quickMarkers || []),
             quickDiscounts: Array.isArray(res.config.quickDiscounts) && res.config.quickDiscounts.length > 0
               ? res.config.quickDiscounts
               : DEFAULT_SETTINGS.quickDiscounts,
@@ -152,6 +173,7 @@ export default function PosSettingsModal({
     setSaving(true);
     try {
       localStorage.setItem("konekt_pos_config", JSON.stringify(form));
+      window.dispatchEvent(new CustomEvent("konekt_pos_config_updated", { detail: form }));
       await posUpdateStoreConfig(form);
       setSaveSuccess(true);
       onSaved?.(form);
@@ -161,6 +183,7 @@ export default function PosSettingsModal({
     } catch (e: any) {
       console.error("Save config error", e);
       localStorage.setItem("konekt_pos_config", JSON.stringify(form));
+      window.dispatchEvent(new CustomEvent("konekt_pos_config_updated", { detail: form }));
       setSaveSuccess(true);
       onSaved?.(form);
       setTimeout(() => {
@@ -169,22 +192,6 @@ export default function PosSettingsModal({
     } finally {
       setSaving(false);
     }
-  };
-
-  const toggleMode = (modeId: string) => {
-    const exists = form.enabledServiceModes.includes(modeId);
-    let updated: string[];
-    if (exists) {
-      if (form.enabledServiceModes.length <= 1) return; // Giữ ít nhất 1 mode
-      updated = form.enabledServiceModes.filter((m) => m !== modeId);
-    } else {
-      updated = [...form.enabledServiceModes, modeId];
-    }
-    let defMode = form.defaultServiceMode;
-    if (!updated.includes(defMode)) {
-      defMode = updated[0];
-    }
-    setForm({ ...form, enabledServiceModes: updated, defaultServiceMode: defMode });
   };
 
   const addQuickTable = () => {
@@ -196,6 +203,19 @@ export default function PosSettingsModal({
 
   const removeQuickTable = (table: string) => {
     setForm({ ...form, quickTables: form.quickTables.filter((t) => t !== table) });
+  };
+
+  const addQuickMarker = () => {
+    const val = newMarkerInput.trim();
+    const current = form.quickMarkers || DEFAULT_SETTINGS.quickMarkers || [];
+    if (!val || current.includes(val)) return;
+    setForm({ ...form, quickMarkers: [...current, val] });
+    setNewMarkerInput("");
+  };
+
+  const removeQuickMarker = (marker: string) => {
+    const current = form.quickMarkers || DEFAULT_SETTINGS.quickMarkers || [];
+    setForm({ ...form, quickMarkers: current.filter((m) => m !== marker) });
   };
 
   const addQuickDiscount = () => {
@@ -233,20 +253,20 @@ export default function PosSettingsModal({
           width: "100%",
           maxWidth: "880px",
           maxHeight: "92vh",
-          backgroundColor: "#FAF8F5",
+          backgroundColor: "#FAF7F2",
           borderRadius: "20px",
           boxShadow: "0 24px 60px rgba(0, 0, 0, 0.3)",
           display: "flex",
           flexDirection: "column",
           overflow: "hidden",
-          border: "1px solid #DFD9CE",
+          border: "1px solid #DFD6C7",
         }}
       >
         {/* Modal Header */}
         <div
           style={{
             padding: "18px 24px",
-            backgroundColor: "#1E2C20",
+            background: "linear-gradient(135deg, #44654D 0%, #344F3C 100%)",
             color: "#FFFFFF",
             display: "flex",
             alignItems: "center",
@@ -260,19 +280,19 @@ export default function PosSettingsModal({
                 width: "38px",
                 height: "38px",
                 borderRadius: "10px",
-                backgroundColor: "rgba(255, 255, 255, 0.12)",
+                backgroundColor: "rgba(255, 255, 255, 0.15)",
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
               }}
             >
-              <Sliders size={20} color="#FAF8F5" />
+              <Sliders size={20} color="#FAF7F2" />
             </div>
             <div>
               <h3 style={{ margin: 0, fontSize: "16px", fontWeight: 700, letterSpacing: "-0.01em" }}>
                 Cài Đặt Web POS · Tùy Chỉnh Đa Ngành
               </h3>
-              <p style={{ margin: 0, fontSize: "12px", color: "rgba(255, 255, 255, 0.7)" }}>
+              <p style={{ margin: 0, fontSize: "12px", color: "rgba(255, 255, 255, 0.8)" }}>
                 Cấu hình chế độ phục vụ, danh sách bàn nhanh, mẫu in hóa đơn K80/K58 & chiết khấu
               </p>
             </div>
@@ -283,7 +303,7 @@ export default function PosSettingsModal({
               background: "transparent",
               border: "none",
               cursor: "pointer",
-              color: "rgba(255, 255, 255, 0.7)",
+              color: "rgba(255, 255, 255, 0.8)",
               padding: "6px",
               borderRadius: "8px",
               display: "flex",
@@ -297,8 +317,8 @@ export default function PosSettingsModal({
         <div
           style={{
             display: "flex",
-            borderBottom: "1px solid #DFD9CE",
-            backgroundColor: "#F4EFEB",
+            borderBottom: "1px solid #DFD6C7",
+            backgroundColor: "#EBE3D7",
             padding: "0 24px",
             gap: "8px",
           }}
@@ -310,8 +330,8 @@ export default function PosSettingsModal({
               padding: "12px 16px",
               border: "none",
               background: "none",
-              borderBottom: activeTab === "service" ? "3px solid #2D3E2F" : "3px solid transparent",
-              color: activeTab === "service" ? "#1E2C20" : "#667064",
+              borderBottom: activeTab === "service" ? "3px solid #3D5E46" : "3px solid transparent",
+              color: activeTab === "service" ? "#213224" : "#667064",
               fontWeight: activeTab === "service" ? 700 : 500,
               fontSize: "13px",
               cursor: "pointer",
@@ -331,8 +351,8 @@ export default function PosSettingsModal({
               padding: "12px 16px",
               border: "none",
               background: "none",
-              borderBottom: activeTab === "receipt" ? "3px solid #2D3E2F" : "3px solid transparent",
-              color: activeTab === "receipt" ? "#1E2C20" : "#667064",
+              borderBottom: activeTab === "receipt" ? "3px solid #3D5E46" : "3px solid transparent",
+              color: activeTab === "receipt" ? "#213224" : "#667064",
               fontWeight: activeTab === "receipt" ? 700 : 500,
               fontSize: "13px",
               cursor: "pointer",
@@ -352,8 +372,8 @@ export default function PosSettingsModal({
               padding: "12px 16px",
               border: "none",
               background: "none",
-              borderBottom: activeTab === "discounts" ? "3px solid #2D3E2F" : "3px solid transparent",
-              color: activeTab === "discounts" ? "#1E2C20" : "#667064",
+              borderBottom: activeTab === "discounts" ? "3px solid #3D5E46" : "3px solid transparent",
+              color: activeTab === "discounts" ? "#213224" : "#667064",
               fontWeight: activeTab === "discounts" ? 700 : 500,
               fontSize: "13px",
               cursor: "pointer",
@@ -369,33 +389,34 @@ export default function PosSettingsModal({
 
         {/* Modal Body */}
         <div style={{ padding: "22px 24px", overflowY: "auto", flex: 1 }}>
-          {/* TAB 1: PHỤC VỤ & ĐỊNH DANH BÀN */}
+          {/* TAB 1: MÔ HÌNH BÁN HÀNG */}
           {activeTab === "service" && (
             <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
               <div>
-                <h4 style={{ margin: "0 0 6px 0", fontSize: "14px", fontWeight: 700, color: "#1E2C20" }}>
-                  Chế Độ Nhận Món Mặc Định
-                </h4>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "4px" }}>
+                  <h4 style={{ margin: 0, fontSize: "14px", fontWeight: 700, color: "#213224" }}>
+                    Mô Hình Bán Hàng Của Quán (Chế độ nhận món)
+                  </h4>
+                  <span style={{ fontSize: "12px", color: "#3D5E46", fontWeight: 700, backgroundColor: "#E3ECE4", padding: "3px 8px", borderRadius: "6px" }}>
+                    1 Mô hình duy nhất
+                  </span>
+                </div>
                 <p style={{ margin: "0 0 12px 0", fontSize: "12px", color: "#667064" }}>
-                  Chọn chế độ tự động áp dụng khi thu ngân tạo đơn mới (có thể đổi nhanh ngay trên giỏ hàng):
+                  Chọn 1 mô hình vận hành cố định của quán. Màn hình bán hàng POS sẽ hiển thị đúng cấu hình này để thu ngân thao tác nhanh nhất:
                 </p>
 
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: "10px" }}>
                   {SERVICE_MODE_OPTIONS.map((opt) => {
                     const isSelected = form.defaultServiceMode === opt.id;
-                    const isEnabled = form.enabledServiceModes.includes(opt.id);
                     return (
                       <div
                         key={opt.id}
-                        onClick={() => {
-                          if (!isEnabled) toggleMode(opt.id);
-                          setForm({ ...form, defaultServiceMode: opt.id });
-                        }}
+                        onClick={() => setForm({ ...form, defaultServiceMode: opt.id })}
                         style={{
                           padding: "12px 14px",
                           borderRadius: "12px",
-                          border: isSelected ? "2px solid #2D3E2F" : "1px solid #DFD9CE",
-                          backgroundColor: isSelected ? "#EBF1EB" : "#FFFFFF",
+                          border: isSelected ? "2px solid #3D5E46" : "1px solid #DFD6C7",
+                          backgroundColor: isSelected ? "#E3ECE4" : "#FAF7F2",
                           cursor: "pointer",
                           display: "flex",
                           flexDirection: "column",
@@ -404,10 +425,10 @@ export default function PosSettingsModal({
                         }}
                       >
                         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                          <span style={{ fontSize: "14px", fontWeight: 700, color: isSelected ? "#2D3E2F" : "#1E2C20" }}>
-                            {opt.icon} {opt.label}
+                          <span style={{ fontSize: "14px", fontWeight: 700, color: isSelected ? "#3D5E46" : "#213224", display: "inline-flex", alignItems: "center", gap: "6px" }}>
+                            <opt.Icon size={16} /> {opt.label}
                           </span>
-                          {isSelected && <CheckCircle2 size={16} color="#2D3E2F" />}
+                          {isSelected && <CheckCircle2 size={16} color="#3D5E46" />}
                         </div>
                         <span style={{ fontSize: "11px", color: "#667064" }}>{opt.desc}</span>
                       </div>
@@ -416,139 +437,252 @@ export default function PosSettingsModal({
                 </div>
               </div>
 
-              {/* Checkbox các chế độ hiển thị trên giỏ hàng */}
-              <div style={{ padding: "14px", backgroundColor: "#F0EBE1", borderRadius: "12px" }}>
-                <span style={{ fontSize: "12px", fontWeight: 700, color: "#2D3E2F", display: "block", marginBottom: "8px" }}>
-                  Bật / Tắt các chế độ được phép xuất hiện trên thanh giỏ hàng:
-                </span>
-                <div style={{ display: "flex", flexWrap: "wrap", gap: "10px" }}>
-                  {SERVICE_MODE_OPTIONS.map((opt) => {
-                    const checked = form.enabledServiceModes.includes(opt.id);
-                    return (
-                      <label
-                        key={`cb-${opt.id}`}
-                        style={{
-                          display: "flex",
-                          alignItems: "center",
-                          gap: "6px",
-                          fontSize: "12px",
-                          cursor: "pointer",
-                          backgroundColor: checked ? "#FFFFFF" : "transparent",
-                          padding: "6px 12px",
-                          borderRadius: "8px",
-                          border: checked ? "1px solid #2D3E2F" : "1px dashed #C4BDAC",
-                          color: checked ? "#1E2C20" : "#777E75",
-                          fontWeight: checked ? 600 : 400,
-                        }}
-                      >
-                        <input
-                          type="checkbox"
-                          checked={checked}
-                          onChange={() => toggleMode(opt.id)}
-                          style={{ accentColor: "#2D3E2F" }}
-                        />
-                        <span>{opt.label}</span>
-                      </label>
-                    );
-                  })}
-                </div>
-              </div>
-
-              {/* Danh sách Bàn Gợi Ý Nhanh (Quick Tables) */}
-              <div style={{ borderTop: "1px solid #DFD9CE", paddingTop: "18px" }}>
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "8px" }}>
-                  <div>
-                    <h4 style={{ margin: 0, fontSize: "14px", fontWeight: 700, color: "#1E2C20" }}>
-                      Danh Sách Bàn / Vị Trí Gợi Ý Nhanh (Quick Table Buttons)
-                    </h4>
-                    <p style={{ margin: "2px 0 0 0", fontSize: "12px", color: "#667064" }}>
-                      Thu ngân có thể click 1 chạm để chọn bàn mà không cần gõ bàn phím
-                    </p>
+              {/* Chi tiết cấu hình theo mô hình đã chọn */}
+              {form.defaultServiceMode === "table" && (
+                <div style={{ borderTop: "1px solid #DFD6C7", paddingTop: "18px" }}>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "8px" }}>
+                    <div>
+                      <h4 style={{ margin: 0, fontSize: "14px", fontWeight: 700, color: "#213224" }}>
+                        Danh Sách Bàn / Vị Trí Gợi Ý Nhanh (Quick Table Buttons)
+                      </h4>
+                      <p style={{ margin: "2px 0 0 0", fontSize: "12px", color: "#667064" }}>
+                        Thu ngân có thể click 1 chạm để chọn bàn mà không cần gõ bàn phím
+                      </p>
+                    </div>
                   </div>
-                </div>
 
-                {/* Form thêm bàn */}
-                <div style={{ display: "flex", gap: "8px", marginBottom: "12px" }}>
-                  <input
-                    type="text"
-                    placeholder="Nhập tên bàn mới (ví dụ: Bàn 9, VIP 2, Tầng 2...)"
-                    value={newTableInput}
-                    onChange={(e) => setNewTableInput(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") {
-                        e.preventDefault();
-                        addQuickTable();
-                      }
-                    }}
-                    style={{
-                      flex: 1,
-                      padding: "8px 12px",
-                      borderRadius: "8px",
-                      border: "1px solid #DFD9CE",
-                      backgroundColor: "#FFFFFF",
-                      fontSize: "13px",
-                    }}
-                  />
-                  <button
-                    type="button"
-                    onClick={addQuickTable}
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: "6px",
-                      padding: "8px 16px",
-                      borderRadius: "8px",
-                      border: "none",
-                      backgroundColor: "#2D3E2F",
-                      color: "#FFFFFF",
-                      fontSize: "13px",
-                      fontWeight: 600,
-                      cursor: "pointer",
-                    }}
-                  >
-                    <Plus size={16} /> Thêm Bàn
-                  </button>
-                </div>
-
-                {/* Chips bàn */}
-                <div style={{ display: "flex", flexWrap: "wrap", gap: "8px" }}>
-                  {form.quickTables.map((t) => (
-                    <div
-                      key={t}
+                  {/* Form thêm bàn */}
+                  <div style={{ display: "flex", gap: "8px", marginBottom: "12px" }}>
+                    <input
+                      type="text"
+                      placeholder="Nhập tên bàn mới (ví dụ: Bàn 9, VIP 2, Tầng 2...)"
+                      value={newTableInput}
+                      onChange={(e) => setNewTableInput(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          addQuickTable();
+                        }
+                      }}
+                      style={{
+                        flex: 1,
+                        padding: "8px 12px",
+                        borderRadius: "8px",
+                        border: "1px solid #DFD6C7",
+                        backgroundColor: "#FFFFFF",
+                        fontSize: "13px",
+                      }}
+                    />
+                    <button
+                      type="button"
+                      onClick={addQuickTable}
                       style={{
                         display: "flex",
                         alignItems: "center",
                         gap: "6px",
-                        padding: "6px 12px",
-                        backgroundColor: "#FFFFFF",
+                        padding: "8px 16px",
                         borderRadius: "8px",
-                        border: "1px solid #DFD9CE",
-                        fontSize: "12px",
+                        border: "none",
+                        backgroundColor: "#3D5E46",
+                        color: "#FFFFFF",
+                        fontSize: "13px",
                         fontWeight: 600,
-                        color: "#2D3E2F",
+                        cursor: "pointer",
                       }}
                     >
-                      <span>🪑 {t}</span>
-                      <button
-                        type="button"
-                        onClick={() => removeQuickTable(t)}
+                      <Plus size={16} /> Thêm Bàn
+                    </button>
+                  </div>
+
+                  {/* Chips bàn */}
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: "8px" }}>
+                    {form.quickTables.map((t) => (
+                      <div
+                        key={t}
                         style={{
-                          border: "none",
-                          background: "transparent",
-                          cursor: "pointer",
-                          color: "#991B1B",
-                          padding: "2px",
                           display: "flex",
                           alignItems: "center",
+                          gap: "6px",
+                          padding: "6px 12px",
+                          backgroundColor: "#FAF7F2",
+                          borderRadius: "8px",
+                          border: "1px solid #DFD6C7",
+                          fontSize: "12px",
+                          fontWeight: 600,
+                          color: "#27402F",
                         }}
-                        title="Xóa bàn này"
                       >
-                        <X size={13} />
-                      </button>
-                    </div>
-                  ))}
+                        <span style={{ display: "inline-flex", alignItems: "center", gap: "5px" }}>
+                          <Armchair size={13} /> {t}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => removeQuickTable(t)}
+                          style={{
+                            border: "none",
+                            background: "transparent",
+                            cursor: "pointer",
+                            color: "#991B1B",
+                            padding: "2px",
+                            display: "flex",
+                            alignItems: "center",
+                          }}
+                          title="Xóa bàn này"
+                        >
+                          <X size={13} />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
                 </div>
-              </div>
+              )}
+
+              {form.defaultServiceMode === "table_marker" && (
+                <div style={{ borderTop: "1px solid #DFD6C7", paddingTop: "18px" }}>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "8px" }}>
+                    <div>
+                      <h4 style={{ margin: 0, fontSize: "14px", fontWeight: 700, color: "#213224" }}>
+                        Danh Sách Thẻ Số Để Bàn / Thẻ Rung Gợi Ý Nhanh (Quick Markers)
+                      </h4>
+                      <p style={{ margin: "2px 0 0 0", fontSize: "12px", color: "#667064" }}>
+                        Thu ngân click 1 chạm để gán thẻ số đưa cho khách mà không cần nhập tay
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Form thêm thẻ */}
+                  <div style={{ display: "flex", gap: "8px", marginBottom: "12px" }}>
+                    <input
+                      type="text"
+                      placeholder="Nhập số thẻ mới (ví dụ: Thẻ 11, Thẻ 12...)"
+                      value={newMarkerInput}
+                      onChange={(e) => setNewMarkerInput(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          addQuickMarker();
+                        }
+                      }}
+                      style={{
+                        flex: 1,
+                        padding: "8px 12px",
+                        borderRadius: "8px",
+                        border: "1px solid #DFD6C7",
+                        backgroundColor: "#FFFFFF",
+                        fontSize: "13px",
+                      }}
+                    />
+                    <button
+                      type="button"
+                      onClick={addQuickMarker}
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "6px",
+                        padding: "8px 16px",
+                        borderRadius: "8px",
+                        border: "none",
+                        backgroundColor: "#3D5E46",
+                        color: "#FFFFFF",
+                        fontSize: "13px",
+                        fontWeight: 600,
+                        cursor: "pointer",
+                      }}
+                    >
+                      <Plus size={16} /> Thêm Thẻ
+                    </button>
+                  </div>
+
+                  {/* Chips thẻ số */}
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: "8px" }}>
+                    {(form.quickMarkers || DEFAULT_SETTINGS.quickMarkers || []).map((m) => (
+                      <div
+                        key={m}
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "6px",
+                          padding: "6px 12px",
+                          backgroundColor: "#FAF7F2",
+                          borderRadius: "8px",
+                          border: "1px solid #DFD6C7",
+                          fontSize: "12px",
+                          fontWeight: 600,
+                          color: "#27402F",
+                        }}
+                      >
+                        <span style={{ display: "inline-flex", alignItems: "center", gap: "5px" }}>
+                          <Tag size={13} /> {m}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => removeQuickMarker(m)}
+                          style={{
+                            border: "none",
+                            background: "transparent",
+                            cursor: "pointer",
+                            color: "#991B1B",
+                            padding: "2px",
+                            display: "flex",
+                            alignItems: "center",
+                          }}
+                          title="Xóa thẻ này"
+                        >
+                          <X size={13} />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {form.defaultServiceMode === "queue_number" && (
+                <div style={{ borderTop: "1px solid #DFD6C7", paddingTop: "18px" }}>
+                  <div style={{ padding: "16px 20px", backgroundColor: "#FAF7F2", borderRadius: "12px", border: "1px solid #DFD6C7" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "8px" }}>
+                      <Hash size={24} color="#3D5E46" />
+                      <h4 style={{ margin: 0, fontSize: "15px", fontWeight: 700, color: "#213224" }}>
+                        Mô Hình Số Thứ Tự (STT) Tự Động Theo Hóa Đơn
+                      </h4>
+                    </div>
+                    <p style={{ margin: 0, fontSize: "13px", color: "#445041", lineHeight: 1.6 }}>
+                      Khi bật mô hình này, màn hình POS sẽ không yêu cầu thu ngân nhập số bàn hay thẻ. Hệ thống sẽ tự động cấp số thứ tự tăng dần theo ngày (VD: <b>#01</b>, <b>#02</b>, <b>#03</b>...) và in nổi bật lên hóa đơn để khách nhìn số lấy đồ tại quầy nhận món.
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {form.defaultServiceMode === "none" && (
+                <div style={{ borderTop: "1px solid #DFD6C7", paddingTop: "18px" }}>
+                  <div style={{ padding: "16px 20px", backgroundColor: "#FAF7F2", borderRadius: "12px", border: "1px solid #DFD6C7" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "8px" }}>
+                      <Zap size={24} color="#3D5E46" />
+                      <h4 style={{ margin: 0, fontSize: "15px", fontWeight: 700, color: "#213224" }}>
+                        Mô Hình Bán Nhanh Tại Quầy (Takeaway / Fast-Casual)
+                      </h4>
+                    </div>
+                    <p style={{ margin: 0, fontSize: "13px", color: "#445041", lineHeight: 1.6 }}>
+                      Dành cho ki-ốt, quầy bán đồ mang đi hoặc bán lẻ. Thu ngân chọn món và bấm thanh toán ngay, bỏ qua hoàn toàn các bước nhập định danh, tối ưu tốc độ thanh toán tối đa.
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {form.defaultServiceMode === "customer_name" && (
+                <div style={{ borderTop: "1px solid #DFD6C7", paddingTop: "18px" }}>
+                  <div style={{ padding: "16px 20px", backgroundColor: "#FAF7F2", borderRadius: "12px", border: "1px solid #DFD6C7" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "8px" }}>
+                      <User size={24} color="#3D5E46" />
+                      <h4 style={{ margin: 0, fontSize: "15px", fontWeight: 700, color: "#213224" }}>
+                        Mô Hình Gọi Tên & SĐT Khách Hàng
+                      </h4>
+                    </div>
+                    <p style={{ margin: 0, fontSize: "13px", color: "#445041", lineHeight: 1.6 }}>
+                      Màn hình POS sẽ hiển thị ô nhập Tên và Số điện thoại khách hàng. Phù hợp cho các tiệm trà sữa, tiệm bánh hoặc spa cần gọi tên khách khi sản phẩm hoàn thành.
+                    </p>
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
@@ -558,7 +692,7 @@ export default function PosSettingsModal({
               {/* Cột trái: Cài đặt thông số in bill */}
               <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
                 <div>
-                  <label style={{ display: "block", fontSize: "12px", fontWeight: 700, color: "#1E2C20", marginBottom: "4px" }}>
+                  <label style={{ display: "block", fontSize: "12px", fontWeight: 700, color: "#213224", marginBottom: "4px" }}>
                     Khổ Giấy In Hóa Đơn
                   </label>
                   <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
@@ -566,15 +700,15 @@ export default function PosSettingsModal({
                       style={{
                         padding: "10px 14px",
                         borderRadius: "10px",
-                        border: form.paperSize === "80mm" ? "2px solid #2D3E2F" : "1px solid #DFD9CE",
-                        backgroundColor: form.paperSize === "80mm" ? "#EBF1EB" : "#FFFFFF",
+                        border: form.paperSize === "80mm" ? "2px solid #3D5E46" : "1px solid #DFD6C7",
+                        backgroundColor: form.paperSize === "80mm" ? "#E3ECE4" : "#FAF7F2",
                         display: "flex",
                         alignItems: "center",
                         gap: "8px",
                         cursor: "pointer",
                         fontSize: "13px",
                         fontWeight: 600,
-                        color: "#1E2C20",
+                        color: "#213224",
                       }}
                     >
                       <input
@@ -582,7 +716,7 @@ export default function PosSettingsModal({
                         name="paperSize"
                         checked={form.paperSize === "80mm"}
                         onChange={() => setForm({ ...form, paperSize: "80mm" })}
-                        style={{ accentColor: "#2D3E2F" }}
+                        style={{ accentColor: "#3D5E46" }}
                       />
                       <span>K80 (80mm - Tiêu chuẩn)</span>
                     </label>
@@ -591,15 +725,15 @@ export default function PosSettingsModal({
                       style={{
                         padding: "10px 14px",
                         borderRadius: "10px",
-                        border: form.paperSize === "58mm" ? "2px solid #2D3E2F" : "1px solid #DFD9CE",
-                        backgroundColor: form.paperSize === "58mm" ? "#EBF1EB" : "#FFFFFF",
+                        border: form.paperSize === "58mm" ? "2px solid #3D5E46" : "1px solid #DFD6C7",
+                        backgroundColor: form.paperSize === "58mm" ? "#E3ECE4" : "#FAF7F2",
                         display: "flex",
                         alignItems: "center",
                         gap: "8px",
                         cursor: "pointer",
                         fontSize: "13px",
                         fontWeight: 600,
-                        color: "#1E2C20",
+                        color: "#213224",
                       }}
                     >
                       <input
@@ -607,7 +741,7 @@ export default function PosSettingsModal({
                         name="paperSize"
                         checked={form.paperSize === "58mm"}
                         onChange={() => setForm({ ...form, paperSize: "58mm" })}
-                        style={{ accentColor: "#2D3E2F" }}
+                        style={{ accentColor: "#3D5E46" }}
                       />
                       <span>K58 (58mm - Máy mini)</span>
                     </label>
@@ -676,10 +810,10 @@ export default function PosSettingsModal({
                 </div>
 
                 {/* Wi-Fi quán in trên bill */}
-                <div style={{ padding: "12px", backgroundColor: "#F0EBE1", borderRadius: "10px" }}>
+                <div style={{ padding: "12px", backgroundColor: "#F2EBE0", borderRadius: "10px", border: "1px solid #DFD6C7" }}>
                   <div style={{ display: "flex", alignItems: "center", gap: "6px", marginBottom: "8px" }}>
-                    <Wifi size={16} color="#2D3E2F" />
-                    <span style={{ fontSize: "12px", fontWeight: 700, color: "#2D3E2F" }}>
+                    <Wifi size={16} color="#3D5E46" />
+                    <span style={{ fontSize: "12px", fontWeight: 700, color: "#3D5E46" }}>
                       Thông Tin Wi-Fi Quán (In lên chân bill cho khách)
                     </span>
                   </div>
@@ -692,7 +826,7 @@ export default function PosSettingsModal({
                       style={{
                         padding: "7px 10px",
                         borderRadius: "6px",
-                        border: "1px solid #C4BDAC",
+                        border: "1px solid #DFD6C7",
                         backgroundColor: "#FFFFFF",
                         fontSize: "12px",
                       }}
@@ -705,7 +839,7 @@ export default function PosSettingsModal({
                       style={{
                         padding: "7px 10px",
                         borderRadius: "6px",
-                        border: "1px solid #C4BDAC",
+                        border: "1px solid #DFD6C7",
                         backgroundColor: "#FFFFFF",
                         fontSize: "12px",
                       }}
@@ -725,7 +859,7 @@ export default function PosSettingsModal({
                       width: "100%",
                       padding: "8px 12px",
                       borderRadius: "8px",
-                      border: "1px solid #DFD9CE",
+                      border: "1px solid #DFD6C7",
                       backgroundColor: "#FFFFFF",
                       fontSize: "13px",
                       boxSizing: "border-box",
@@ -735,22 +869,22 @@ export default function PosSettingsModal({
 
                 {/* Toggle Options */}
                 <div style={{ display: "flex", flexDirection: "column", gap: "8px", marginTop: "4px" }}>
-                  <label style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "13px", fontWeight: 600, color: "#2D3E2F", cursor: "pointer" }}>
+                  <label style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "13px", fontWeight: 600, color: "#213224", cursor: "pointer" }}>
                     <input
                       type="checkbox"
                       checked={form.autoPrintReceipt}
                       onChange={(e) => setForm({ ...form, autoPrintReceipt: e.target.checked })}
-                      style={{ accentColor: "#2D3E2F", width: "16px", height: "16px" }}
+                      style={{ accentColor: "#3D5E46", width: "16px", height: "16px" }}
                     />
                     <span>Tự động mở hộp thoại in sau khi hoàn tất thanh toán</span>
                   </label>
 
-                  <label style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "13px", fontWeight: 600, color: "#2D3E2F", cursor: "pointer" }}>
+                  <label style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "13px", fontWeight: 600, color: "#213224", cursor: "pointer" }}>
                     <input
                       type="checkbox"
                       checked={form.printCashierName}
                       onChange={(e) => setForm({ ...form, printCashierName: e.target.checked })}
-                      style={{ accentColor: "#2D3E2F", width: "16px", height: "16px" }}
+                      style={{ accentColor: "#3D5E46", width: "16px", height: "16px" }}
                     />
                     <span>In tên thu ngân trên hóa đơn</span>
                   </label>
@@ -832,8 +966,9 @@ export default function PosSettingsModal({
 
                 <div style={{ borderTop: "1px dashed #94A3B8", margin: "8px 0" }} />
                 {(form.wifiSsid || form.wifiPassword) && (
-                  <div style={{ textAlign: "center", fontSize: "11px", margin: "4px 0" }}>
-                    📶 Wi-Fi: <b>{form.wifiSsid || "Free"}</b> | Pass: <b>{form.wifiPassword || "None"}</b>
+                  <div style={{ textAlign: "center", fontSize: "11px", margin: "4px 0", display: "flex", alignItems: "center", justifyContent: "center", gap: 4 }}>
+                    <Wifi size={12} />
+                    <span>Wi-Fi: <b>{form.wifiSsid || "Free"}</b> | Pass: <b>{form.wifiPassword || "None"}</b></span>
                   </div>
                 )}
                 <div style={{ textAlign: "center", fontSize: "11px", fontStyle: "italic", marginTop: "4px" }}>
@@ -851,7 +986,7 @@ export default function PosSettingsModal({
             <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
               {/* Giảm giá nhanh */}
               <div>
-                <h4 style={{ margin: "0 0 6px 0", fontSize: "14px", fontWeight: 700, color: "#1E2C20" }}>
+                <h4 style={{ margin: "0 0 6px 0", fontSize: "14px", fontWeight: 700, color: "#213224" }}>
                   Cấu Hình Phím Giảm Giá Nhanh (% Quick Discounts)
                 </h4>
                 <p style={{ margin: "0 0 12px 0", fontSize: "12px", color: "#667064" }}>
@@ -877,7 +1012,7 @@ export default function PosSettingsModal({
                       flex: 1,
                       padding: "8px 12px",
                       borderRadius: "8px",
-                      border: "1px solid #DFD9CE",
+                      border: "1px solid #DFD6C7",
                       backgroundColor: "#FFFFFF",
                       fontSize: "13px",
                     }}
@@ -892,7 +1027,7 @@ export default function PosSettingsModal({
                       padding: "8px 16px",
                       borderRadius: "8px",
                       border: "none",
-                      backgroundColor: "#2D3E2F",
+                      backgroundColor: "#3D5E46",
                       color: "#FFFFFF",
                       fontSize: "13px",
                       fontWeight: 600,
@@ -913,9 +1048,9 @@ export default function PosSettingsModal({
                         alignItems: "center",
                         gap: "6px",
                         padding: "6px 14px",
-                        backgroundColor: "#FFFFFF",
+                        backgroundColor: "#FAF7F2",
                         borderRadius: "8px",
-                        border: "1px solid #DFD9CE",
+                        border: "1px solid #DFD6C7",
                         fontSize: "13px",
                         fontWeight: 700,
                         color: "#2E7D32",
@@ -943,8 +1078,8 @@ export default function PosSettingsModal({
               </div>
 
               {/* Phương thức thanh toán ưu tiên */}
-              <div style={{ borderTop: "1px solid #DFD9CE", paddingTop: "18px" }}>
-                <h4 style={{ margin: "0 0 6px 0", fontSize: "14px", fontWeight: 700, color: "#1E2C20" }}>
+              <div style={{ borderTop: "1px solid #DFD6C7", paddingTop: "18px" }}>
+                <h4 style={{ margin: "0 0 6px 0", fontSize: "14px", fontWeight: 700, color: "#213224" }}>
                   Phương Thức Thanh Toán Mặc Định Khi Mở Màn Hình Trả Tiền
                 </h4>
                 <div style={{ display: "flex", gap: "12px", marginTop: "10px" }}>
@@ -952,15 +1087,15 @@ export default function PosSettingsModal({
                     style={{
                       padding: "12px 18px",
                       borderRadius: "10px",
-                      border: form.defaultPaymentMethod === "cash" ? "2px solid #2D3E2F" : "1px solid #DFD9CE",
-                      backgroundColor: form.defaultPaymentMethod === "cash" ? "#EBF1EB" : "#FFFFFF",
+                      border: form.defaultPaymentMethod === "cash" ? "2px solid #3D5E46" : "1px solid #DFD6C7",
+                      backgroundColor: form.defaultPaymentMethod === "cash" ? "#E3ECE4" : "#FAF7F2",
                       display: "flex",
                       alignItems: "center",
                       gap: "8px",
                       cursor: "pointer",
                       fontSize: "13px",
                       fontWeight: 700,
-                      color: "#1E2C20",
+                      color: "#213224",
                     }}
                   >
                     <input
@@ -968,24 +1103,26 @@ export default function PosSettingsModal({
                       name="defaultPaymentMethod"
                       checked={form.defaultPaymentMethod === "cash"}
                       onChange={() => setForm({ ...form, defaultPaymentMethod: "cash" })}
-                      style={{ accentColor: "#2D3E2F" }}
+                      style={{ accentColor: "#3D5E46" }}
                     />
-                    <span>💵 Tiền Mặt (Khách đưa tiền & tính tiền thối)</span>
+                    <span style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}>
+                      <Banknote size={15} /> Tiền Mặt (Khách đưa tiền & tính tiền thối)
+                    </span>
                   </label>
 
                   <label
                     style={{
                       padding: "12px 18px",
                       borderRadius: "10px",
-                      border: form.defaultPaymentMethod === "transfer" ? "2px solid #2D3E2F" : "1px solid #DFD9CE",
-                      backgroundColor: form.defaultPaymentMethod === "transfer" ? "#EBF1EB" : "#FFFFFF",
+                      border: form.defaultPaymentMethod === "transfer" ? "2px solid #3D5E46" : "1px solid #DFD6C7",
+                      backgroundColor: form.defaultPaymentMethod === "transfer" ? "#E3ECE4" : "#FAF7F2",
                       display: "flex",
                       alignItems: "center",
                       gap: "8px",
                       cursor: "pointer",
                       fontSize: "13px",
                       fontWeight: 700,
-                      color: "#1E2C20",
+                      color: "#213224",
                     }}
                   >
                     <input
@@ -993,9 +1130,11 @@ export default function PosSettingsModal({
                       name="defaultPaymentMethod"
                       checked={form.defaultPaymentMethod === "transfer"}
                       onChange={() => setForm({ ...form, defaultPaymentMethod: "transfer" })}
-                      style={{ accentColor: "#2D3E2F" }}
+                      style={{ accentColor: "#3D5E46" }}
                     />
-                    <span>📱 Chuyển Khoản VietQR Tự Động</span>
+                    <span style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}>
+                      <QrCode size={15} /> Chuyển Khoản VietQR Tự Động
+                    </span>
                   </label>
                 </div>
               </div>
@@ -1007,8 +1146,8 @@ export default function PosSettingsModal({
         <div
           style={{
             padding: "16px 24px",
-            backgroundColor: "#F4EFEB",
-            borderTop: "1px solid #DFD9CE",
+            backgroundColor: "#EBE3D7",
+            borderTop: "1px solid #DFD6C7",
             display: "flex",
             alignItems: "center",
             justifyContent: "space-between",
@@ -1027,8 +1166,8 @@ export default function PosSettingsModal({
               style={{
                 padding: "9px 18px",
                 borderRadius: "10px",
-                border: "1px solid #DFD9CE",
-                backgroundColor: "#FFFFFF",
+                border: "1px solid #DFD6C7",
+                backgroundColor: "#FAF7F2",
                 color: "#445041",
                 fontSize: "13px",
                 fontWeight: 600,
@@ -1044,13 +1183,13 @@ export default function PosSettingsModal({
                 padding: "9px 24px",
                 borderRadius: "10px",
                 border: "none",
-                backgroundColor: "#2D3E2F",
+                backgroundColor: "#3D5E46",
                 color: "#FFFFFF",
                 fontSize: "13px",
                 fontWeight: 700,
                 cursor: saving ? "not-allowed" : "pointer",
                 opacity: saving ? 0.7 : 1,
-                boxShadow: "0 2px 6px rgba(45, 62, 47, 0.3)",
+                boxShadow: "0 2px 6px rgba(61, 94, 70, 0.3)",
               }}
             >
               {saving ? "Đang lưu..." : "Lưu Cài Đặt"}

@@ -38,16 +38,21 @@ export default function MerchantLoginPage() {
       const data = await authApi.loginKonekt({ identifier: identifier.trim(), password });
       setTokensAndUser(data.accessToken, data.refreshToken, data.user);
 
-      // Điều hướng thông minh theo vai trò
+      // Điều hướng thông minh theo vai trò và trạng thái Onboarding
+      if (data.user?.requireStoreJoin) {
+        navigate("/workspace/join-store", { replace: true });
+        return;
+      }
+
       const role = data.user?.role || data.user?.roles?.[0];
       if (role === "owner" || role === "platform_admin") {
         navigate("/office", { replace: true });
       } else if (role === "store_manager") {
         navigate("/store/manager", { replace: true });
-      } else if (role === "staff") {
-        navigate("/pos/order", { replace: true });
+      } else if (role === "shift_leader" || role === "staff") {
+        navigate("/store/staff", { replace: true });
       } else {
-        navigate("/office", { replace: true });
+        navigate("/store/staff", { replace: true });
       }
     } catch (err: any) {
       setError(
@@ -425,18 +430,32 @@ export default function MerchantLoginPage() {
               marginTop: 24,
               paddingTop: 18,
               borderTop: "1px solid #F0EAE2",
+              display: "flex",
+              flexDirection: "column",
+              gap: 8,
               textAlign: "center",
               fontSize: "0.85rem",
               color: "#687668",
             }}
           >
-            <span>Chưa có tài khoản cửa hàng? </span>
-            <Link
-              to="/register/owner"
-              style={{ color: "#364D39", fontWeight: 700, textDecoration: "underline" }}
-            >
-              Mở Cửa Hàng Mới Ngay
-            </Link>
+            <div>
+              <span>Bạn là nhân viên mới? </span>
+              <Link
+                to="/register/staff"
+                style={{ color: "#3D5E46", fontWeight: 700, textDecoration: "underline" }}
+              >
+                Tạo Tài Khoản Nhân Viên
+              </Link>
+            </div>
+            <div>
+              <span>Chưa có cửa hàng? </span>
+              <Link
+                to="/register/owner"
+                style={{ color: "#3D5E46", fontWeight: 700, textDecoration: "underline" }}
+              >
+                Khởi Tạo Quán Mới (Chủ Quán)
+              </Link>
+            </div>
           </div>
         </div>
       </div>

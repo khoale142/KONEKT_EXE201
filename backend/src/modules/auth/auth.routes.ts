@@ -110,11 +110,13 @@ router.get("/me", authGuard, me);
 // ── KONEKT Multi-Tenant Endpoints ──
 import {
   registerOwnerHandler,
+  registerStaffHandler,
   loginKonektHandler,
   demoLoginHandler,
 } from "./auth.controller";
 
 router.post("/register-owner", registerOwnerHandler);
+router.post("/register-staff", registerStaffHandler);
 router.post("/login-konekt", loginKonektHandler);
 router.post("/demo-login", demoLoginHandler);
 

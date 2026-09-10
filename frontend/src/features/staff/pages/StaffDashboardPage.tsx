@@ -9,11 +9,25 @@ import {
   DashboardSection,
   FeatureCard,
   FeatureGrid,
-  DashIcons,
   type FeatureCardItem,
 } from "../../shared/dashboard/dashboardUi";
 import { StaffCheckInWidget } from "../components/StaffCheckInWidget";
 import { StaffHistoryWidget } from "../components/StaffHistoryWidget";
+import {
+  ShoppingCart,
+  Coffee,
+  Calculator,
+  Calendar,
+  Wallet,
+  User,
+  ClipboardList,
+  PackageCheck,
+  Trash2,
+  Clock,
+  CheckCircle2,
+  Building2,
+  ShieldCheck,
+} from "lucide-react";
 
 type TodayResponse = {
   schedule: {
@@ -35,34 +49,6 @@ type TodayResponse = {
     earlyLeaveMinutes: number;
   } | null;
 };
-
-const QUICK_LINKS: readonly FeatureCardItem[] = [
-  {
-    to: "/store/staff/profile",
-    title: "Hồ sơ cá nhân",
-    description: "Xem thông tin, CCCD, liên hệ khẩn cấp và tài liệu đính kèm.",
-    icon: DashIcons.user,
-    featured: true,
-  },
-  {
-    to: "/store/staff/profile/edit-request",
-    title: "Chỉnh sửa hồ sơ",
-    description: "Gửi yêu cầu cập nhật hồ sơ để quản lý và HR duyệt.",
-    icon: DashIcons.edit,
-  },
-  {
-    to: "/store/staff/schedules",
-    title: "Lịch làm việc",
-    description: "Theo dõi các ca làm đã được phân công theo ngày.",
-    icon: DashIcons.calendar,
-  },
-  {
-    to: "/store/staff/payroll",
-    title: "Bảng lương",
-    description: "Xem tổng giờ làm và lương tháng của bạn.",
-    icon: DashIcons.wallet,
-  },
-] as const;
 
 export default function StaffDashboardPage() {
   const user = useAuthStore((s) => s.user);
@@ -140,62 +126,122 @@ export default function StaffDashboardPage() {
   };
 
   const name = user?.fullName || user?.username || "bạn";
-  const badgeText = isShiftLeader ? "Shift Leader" : "Nhân viên";
+  const badgeText = isShiftLeader
+    ? "Trưởng Ca (Shift Leader)"
+    : isStoreManager
+      ? "Quản Lý Cửa Hàng"
+      : "Nhân Viên Vận Hành";
 
+  const storeDisplayName = user?.storeName || (user?.storeId ? `Chi nhánh #${user.storeId}` : "KONEKT Coffee");
+
+  // 1. TÁC VỤ BÁN HÀNG & PHA CHẾ (1-TAP OPERATIONS)
+  const posOperations: FeatureCardItem[] = [
+    {
+      to: "/pos/order",
+      title: "Mở POS Bán Hàng",
+      description: "Giao diện thu ngân order món, in bill và thanh toán VietQR / tiền mặt.",
+      icon: <ShoppingCart size={22} color="#3D5E46" />,
+      featured: true,
+    },
+    {
+      to: "/pos/kds",
+      title: "Màn Hình Bếp (KDS)",
+      description: "Theo dõi order cần pha chế theo thời gian thực cho Barista / Bếp.",
+      icon: <Coffee size={22} color="#3D5E46" />,
+      featured: true,
+    },
+  ];
+
+  if (isShiftLeader || isStoreManager) {
+    posOperations.push({
+      to: "/pos/shift-reconciliation",
+      title: "Kiểm Quỹ & Chốt Ca",
+      description: "Kiểm đếm tiền két đầu ca, chốt doanh thu tiền mặt và bàn giao ca.",
+      icon: <Calculator size={22} color="#3D5E46" />,
+      featured: true,
+    });
+  }
+
+  // 2. LỊCH LÀM VIỆC & QUYỀN LỢI CÁ NHÂN
+  const personalCards: FeatureCardItem[] = [
+    {
+      to: "/store/staff/schedules",
+      title: "Lịch làm việc của tôi",
+      description: "Theo dõi các ca làm việc đã được xếp lịch trong tuần.",
+      icon: <Calendar size={22} color="#3D5E46" />,
+      featured: true,
+    },
+    {
+      to: "/store/staff/payroll",
+      title: "Bảng lương & Giờ công",
+      description: "Xem tổng giờ làm, công chuẩn và thu nhập trong tháng.",
+      icon: <Wallet size={22} color="#3D5E46" />,
+    },
+    {
+      to: "/store/staff/profile",
+      title: "Hồ sơ cá nhân",
+      description: "Xem thông tin nhân sự, số điện thoại và thông tin liên hệ.",
+      icon: <User size={22} color="#3D5E46" />,
+    },
+  ];
+
+  // 3. TÁC VỤ KHO & VẬN HÀNH CA
   const inventoryCards: FeatureCardItem[] = [
     {
       to: "/store/staff/inventory-shift",
-      title: "Kiểm kê tồn kho",
+      title: "Kiểm kê tồn kho ca",
       description: isShiftLeader
-        ? "Mở phiên kiểm hàng, đối chiếu tồn kho và gửi duyệt."
-        : "Khai báo tồn hàng cuối ca và gửi theo quy trình.",
-      icon: DashIcons.clipboard,
+        ? "Mở phiên kiểm hàng, đối chiếu số lượng thực tế và gửi duyệt."
+        : "Khai báo tồn nguyên vật liệu cuối ca theo quy trình.",
+      icon: <ClipboardList size={22} color="#3D5E46" />,
       featured: true,
     },
     {
       to: "/store/staff/inventory-receipts",
-      title: "Nhập hàng",
-      description: "Tạo phiếu nhập kho khi cửa hàng nhận hàng thực tế.",
-      icon: DashIcons.assign,
+      title: "Nhập hàng vào kho",
+      description: "Tạo phiếu nhập nguyên vật liệu khi cửa hàng nhận hàng thực tế.",
+      icon: <PackageCheck size={22} color="#3D5E46" />,
     },
     {
       to: "/inventory/disposals/create",
-      title: "Báo hủy hàng",
-      description: "Tạo phiếu hủy hàng cho mặt hàng hỏng, lỗi hoặc hết hạn.",
-      icon: DashIcons.edit,
+      title: "Báo hủy hàng hỏng",
+      description: "Tạo phiếu hủy nguyên vật liệu hỏng, quá hạn hoặc đổ vỡ.",
+      icon: <Trash2 size={22} color="#3D5E46" />,
     },
     {
       to: "/inventory/disposals/my",
-      title: "Lịch sử hủy hàng",
-      description: "Xem các phiếu hủy hàng do bạn đã tạo.",
-      icon: DashIcons.clock,
+      title: "Lịch sử báo hủy",
+      description: "Xem các phiếu báo hủy do bạn đã lập trong tháng.",
+      icon: <Clock size={22} color="#3D5E46" />,
     },
   ];
 
+  // 4. PHÊ DUYỆT (DÀNH CHO SHIFT LEADER & STORE MANAGER)
   const approvalCards: FeatureCardItem[] = [];
-  if (isShiftLeader) {
+  if (isShiftLeader || isStoreManager) {
     approvalCards.push(
       {
         to: "/store/inventory/leader-approval",
-        title: "Xác nhận phiếu kiểm hàng",
-        description: "Trưởng ca kiểm tra batch kiểm hàng trước khi gửi tiếp.",
-        icon: DashIcons.users,
+        title: "Duyệt phiếu kiểm hàng ca",
+        description: "Trưởng ca kiểm tra và xác nhận biên bản kiểm kho của nhân viên.",
+        icon: <ShieldCheck size={22} color="#3D5E46" />,
         featured: true,
       },
       {
         to: "/store/inventory/receipt-leader-approval",
-        title: "Xác nhận phiếu nhập hàng",
-        description: "Duyệt phiếu nhập kho do nhân viên gửi lên.",
-        icon: DashIcons.assign,
+        title: "Duyệt phiếu nhập hàng ca",
+        description: "Xác nhận số lượng nguyên vật liệu nhập kho thực tế.",
+        icon: <CheckCircle2 size={22} color="#3D5E46" />,
       }
     );
   }
+
   if (isStoreManager) {
     approvalCards.push({
-      to: "/store/inventory/store-manager-approval",
-      title: "Duyệt phiếu kiểm hàng",
-      description: "Quản lý cửa hàng duyệt phiếu kiểm hàng sau trưởng ca.",
-      icon: DashIcons.chart,
+      to: "/store/manager",
+      title: "Trung Tâm Quản Lý Chi Nhánh",
+      description: "Phân ca nhân viên, duyệt đổi ca và xem báo cáo doanh thu cửa hàng.",
+      icon: <Building2 size={22} color="#3D5E46" />,
       featured: true,
     });
   }
@@ -205,29 +251,17 @@ export default function StaffDashboardPage() {
       <DashboardHero
         badge={<RoleBadge>{badgeText}</RoleBadge>}
         title={`Xin chào, ${name}`}
-        subtitle="Cổng nhân viên để chấm công hôm nay, theo dõi lịch làm và truy cập nhanh các tác vụ trong ca."
+        subtitle={`Cổng nhân viên ${storeDisplayName} · Chấm công hôm nay, bán hàng POS và quản lý ca làm việc.`}
       />
 
-      <StaffCheckInWidget
-        data={data}
-        loading={loading}
-        error={error}
-        submitting={submitting}
-        onCheckIn={handleCheckIn}
-        onCheckOut={handleCheckOut}
-      />
-
-      <DashboardSection title="Lịch sử chấm công" description="Theo dõi 5 ca làm gần nhất của bạn.">
-        <StaffHistoryWidget />
-      </DashboardSection>
-
+      {/* SECTION 1: TÁC VỤ VẬN HÀNH & BÁN HÀNG TỨC THÌ */}
       <DashboardSection
-        title="Truy cập nhanh"
-        description="Các chức năng cá nhân được dùng thường xuyên."
+        title="Vận hành & Bán hàng"
+        description="Mở nhanh giao diện Web POS thu ngân, màn hình bếp KDS hoặc chốt ca kiểm quỹ."
         emphasized
       >
         <FeatureGrid>
-          {QUICK_LINKS.map((item) => (
+          {posOperations.map((item) => (
             <FeatureCard
               key={item.to}
               to={item.to}
@@ -240,9 +274,44 @@ export default function StaffDashboardPage() {
         </FeatureGrid>
       </DashboardSection>
 
+      {/* SECTION 2: CHẤM CÔNG CA HÔM NAY */}
+      <StaffCheckInWidget
+        data={data}
+        loading={loading}
+        error={error}
+        submitting={submitting}
+        onCheckIn={handleCheckIn}
+        onCheckOut={handleCheckOut}
+      />
+
+      {/* SECTION 3: LỊCH SỬ CHẤM CÔNG */}
+      <DashboardSection title="Lịch sử chấm công" description="Theo dõi các ca làm việc gần nhất của bạn.">
+        <StaffHistoryWidget />
+      </DashboardSection>
+
+      {/* SECTION 4: LỊCH LÀM & QUYỀN LỢI CÁ NHÂN */}
       <DashboardSection
-        title="Tác vụ trong ca"
-        description="Các nghiệp vụ tồn kho, nhập hàng và hủy hàng trong ngày."
+        title="Lịch làm việc & Cá nhân"
+        description="Theo dõi lịch phân ca và thông tin thu nhập."
+      >
+        <FeatureGrid>
+          {personalCards.map((item) => (
+            <FeatureCard
+              key={item.to}
+              to={item.to}
+              title={item.title}
+              description={item.description}
+              icon={item.icon}
+              featured={item.featured}
+            />
+          ))}
+        </FeatureGrid>
+      </DashboardSection>
+
+      {/* SECTION 5: TỒN KHO & HÀNG HÓA CA */}
+      <DashboardSection
+        title="Kho & Hàng hóa trong ca"
+        description="Kiểm kê tồn kho, tạo phiếu nhập hàng và báo hủy nguyên vật liệu."
       >
         <FeatureGrid>
           {inventoryCards.map((item) => (
@@ -258,10 +327,12 @@ export default function StaffDashboardPage() {
         </FeatureGrid>
       </DashboardSection>
 
+      {/* SECTION 6: KHU VỰC PHÊ DUYỆT CỦA TRƯỞNG CA & QUẢN LÝ */}
       {approvalCards.length > 0 && (
         <DashboardSection
-          title="Phê duyệt"
-          description="Các thao tác xác nhận dành cho trưởng ca và quản lý cửa hàng."
+          title="Phê duyệt & Điều hành"
+          description="Dành riêng cho Trưởng ca (Shift Leader) và Quản lý cửa hàng."
+          emphasized
         >
           <FeatureGrid>
             {approvalCards.map((item) => (

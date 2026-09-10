@@ -890,4 +890,274 @@
     * Nhấn thanh toán Tiền mặt -> Modal hóa đơn nhiệt K80 xuất hiện đầy đủ thông tin chi tiết.
     * Nhấn "Giữ đơn" -> Đơn lưu thành công vào danh sách "Đơn Đang Giữ" (`#HOLD-KONEKT-260910-2537`) -> Bấm "Mở Lại & Thanh Toán" phục hồi toàn bộ giỏ hàng và dữ liệu.
 
+---
+
+### [LOG-006] | 10/09/2026 - TINH CHỈNH MÀU SẮC GIAO DIỆN WEB POS: XANH RÊU TÔNG SÁNG & NỀN KEM SỮA ẤM ÁP
+* **Người thực hiện**: Antigravity AI Agent (theo chỉ đạo trực tiếp của User).
+* **Bối cảnh & Yêu cầu của User**:
+  - *"màu xanh rêu của trang pos đậm quá làm cho nó sáng hơn đi xanh rêu tông sáng và background kem sữa vẫn còn hơi trắng"*
+  - Màu xanh rêu trước đây quá đậm/tối (`#1E2C20`, `#2D3E2F`, `#2B402D`) khiến giao diện nặng nề, u ám. Cần chuyển sang **xanh rêu tông sáng** (Bright Botanical Moss `#3D5E46`, gradient header `#44654D` ➔ `#344F3C`, soft tint `#E3ECE4`, text `#213224` / `#27402F`).
+  - Màu nền kem sữa trước đây (`#FAF8F5`, `#FFFFFF`) vẫn còn hơi trắng lóa mắt. Cần chuyển sang **nền kem sữa ấm áp rõ rệt** (Warm Milky Cream / Latte `#EFE9DF` cho app background toàn trang, `#FAF7F2` cho panel/cards, `#EBE3D7` / `#F2EBE0` cho sub-panels/pills/inputs, viền ấm `#DFD6C7`).
+* **Các thay đổi Kỹ thuật Đã Thực Hiện**:
+  1. **Hệ thống CSS Variables chung (`frontend/src/index.css` & `pos-theme.css`)**:
+     - `--cafe-olive`: Đổi sang `#3D5E46` (xanh rêu tông sáng).
+     - `--cafe-cream`: Đổi sang `#EFE9DF` (kem sữa ấm áp).
+     - `--cafe-cream-dark`: Đổi sang `#E2DACD`.
+     - `--cafe-cream-light` & `--cafe-white`: Đổi sang `#FAF7F2`.
+     - `--pos-bg`: `#EFE9DF`, `.pos-screen` background gradient: `linear-gradient(180deg, #F0EAE1 0%, #E8E0D4 100%)`.
+  2. **Khung giao diện POS (`PosWorkspaceLayout.tsx`)**:
+     - Background toàn bộ workspace chuyển sang `#EFE9DF`.
+     - Header POS chuyển sang dải gradient xanh rêu sáng sang trọng `linear-gradient(135deg, #44654D 0%, #344F3C 100%)`.
+     - Chữ, badge, icon và navigation pills căn chỉnh màu sắc tươi sáng, tương phản sắc nét.
+  3. **Màn hình bán hàng chính (`PosOrderPage.tsx`)**:
+     - Cập nhật toàn bộ các cards, category pills, product cards, variant buttons sang nền kem `#FAF7F2` và viền `#DFD6C7`.
+     - Chế độ phục vụ (Service mode buttons) và gợi ý bàn nhanh (Quick tables): Nút chọn active sử dụng xanh rêu sáng `#3D5E46`, nền phụ `#E3ECE4` với chữ xanh rêu đậm `#27402F`.
+     - Khối chiết khấu nhanh (% Quick discounts): Nút 0% và các nút % khi được chọn mang màu xanh rêu sáng `#3D5E46` hoặc xanh sage `#E3ECE4`.
+  4. **Trang danh sách đơn tạm giữ (`PosHeldOrdersPage.tsx`)**:
+     - Chuyển background sang `#EFE9DF`.
+     - Order cards dùng nền kem `#FAF7F2`, viền mềm `#DFD6C7`, danh sách món tóm tắt dùng `#F2EBE0`.
+     - Nút "Làm mới", "Tạo Đơn Mới", "Mở Lại & Thanh Toán" đồng bộ xanh rêu sáng `#3D5E46`.
+  5. **Hộp thoại Cài đặt POS (`PosSettingsModal.tsx`)**:
+     - Header chuyển sang `linear-gradient(135deg, #44654D 0%, #344F3C 100%)`.
+     - Modal tabs bar: Nền `#EBE3D7`, active tab gạch chân `#3D5E46`.
+     - Tùy chọn khổ giấy K80/K58, Radio buttons, Checkbox accent, nút "Lưu Cài Đặt": Đồng bộ `#3D5E46`.
+  6. **Modal Hóa đơn thanh toán (`PosReceiptModal.tsx`)**:
+     - Action buttons footer ("In Hóa Đơn", "Tạo Đơn Mới") chuyển sang xanh rêu sáng `#3D5E46`.
+* **Files tác động**:
+  - `[CHỈNH SỬA]` `frontend/src/index.css`
+  - `[CHỈNH SỬA]` `frontend/src/features/pos/styles/pos-theme.css`
+  - `[CHỈNH SỬA]` `frontend/src/features/pos/layouts/PosWorkspaceLayout.tsx`
+  - `[CHỈNH SỬA]` `frontend/src/features/pos/pages/PosOrderPage.tsx`
+  - `[CHỈNH SỬA]` `frontend/src/features/pos/pages/PosHeldOrdersPage.tsx`
+  - `[CHỈNH SỬA]` `frontend/src/features/pos/pages/PosDashboardPage.tsx`
+  - `[CHỈNH SỬA]` `frontend/src/features/pos/pages/PosPickupSelectPage.tsx`
+  - `[CHỈNH SỬA]` `frontend/src/features/pos/components/PosSettingsModal.tsx`
+  - `[CHỈNH SỬA]` `frontend/src/features/pos/components/PosReceiptModal.tsx`
+  - `[CHỈNH SỬA]` `docs/Developing/logs/DEV_CHANGELOG.md`
+* **Kết quả Xác minh**:
+  - **Kiểm tra biên dịch**: `npx tsc --noEmit` đạt Exit 0 sạch sẽ hoàn toàn.
+  - **Browser Subagent Visual Test (`pos_bright_theme_1789013319663.webp`)**:
+    * Màn hình bán hàng (`pos_main_ordering_screen`): Nền kem sữa ấm áp dịu mắt, header xanh rêu sáng tươi tắn, các nút bấm nổi bật hài hòa chuẩn phong cách cà phê hiện đại.
+    * Modal cài đặt (`pos_settings_modal`): Tông xanh rêu sáng và viền kem latte đồng bộ liền mạch.
+    * Trang đơn giữ (`pos_held_orders_page`): Nền kem sữa ấm và thẻ đơn hàng hiển thị trực quan, sạch sẽ.
+
+---
+
+### [LOG-007] | 10/09/2026 - TỐI GIẢN POS RAIL: XÓA BỎ LOẠI ĐƠN & CHUYỂN CHẾ ĐỘ NHẬN MÓN THÀNH CẤU HÌNH BÁN HÀNG DUY NHẤT TRONG CÀI ĐẶT
+* **Người thực hiện**: Antigravity AI Agent (theo chỉ đạo trực tiếp của Chủ quán).
+* **Tuân thủ**:
+  - `AI_RULES.md`: Quy trình 5 bước nghiêm ngặt, Clean Code, bảo toàn logic cũ, chỉ dùng icon trong thư viện Lucide-React, tuân thủ bảng màu xanh rêu sáng `#3D5E46` & kem latte `#FAF7F2`.
+  - Kỹ năng UI/UX: Design Taste Frontend & High-End Visual Design (thẩm mỹ Double-Bezel, micro-interaction, chống rập khuôn, tối ưu trải nghiệm thao tác thu ngân).
+* **Bối cảnh & Yêu cầu của Chủ quán**:
+  - *"bên cột này đang có loại đơn và chế độ nhận món, xưa chế độ đơn là dành cho hệ thống, đơn đặt biệt, đơn mời khách, đơn xử lý complain, những đơn đó sẽ không cộng doanh thu nhưng vẫn trừ kho, tuy nhiên với scope hiện tại, đã không còn cần dùng tới tính năng đó nữa hoặc có dùng ít khi nên bỏ cái đó đi không dùng nữa. Còn cái chế độ nhận món, cái bàn ghế đó tao muốn đưa vào setting cho luồn order, nếu chọn bàn/thẻ thì cho sẽ cho cấu hình bàn/thẻ còn nếu muốn in bill số thì sẽ in bill số tức là tại một thời điểm chỉ hỗ trợ 1 tính năng thôi ko phải linh động nhiều như vậy, sửa lại phần này không phải là một tính năng trên trang pos mà là cấu hình để bán hàng"*
+* **Các thay đổi Kỹ thuật Đã Thực Hiện**:
+  1. **Tái cấu trúc Modal Cài Đặt POS (`frontend/src/features/pos/components/PosSettingsModal.tsx`)**:
+     - Thêm trường `quickMarkers` (danh sách số thẻ gợi ý nhanh: `Thẻ 01` -> `Thẻ 10`) vào `PosSettingsData` và `DEFAULT_SETTINGS`.
+     - Tab 1 được nâng cấp thành **"1. Mô Hình Bán Hàng Của Quán (Chế độ nhận món)"**:
+       * Thiết kế thẻ chọn Radio trực quan với 5 mô hình kinh doanh: `🪑 Số Bàn`, `🏷️ Thẻ Số Để Bàn`, `🔢 Số Thứ Tự (STT)`, `👤 Tên & SĐT Khách`, `⚡ Bán Nhanh Tại Quầy`.
+       * **Ràng buộc duy nhất 1 mô hình**: Quán chỉ chọn 1 mô hình hoạt động cố định. Giao diện POS bên ngoài sẽ hiển thị tương ứng theo đúng cấu hình này.
+       * Cấu hình chi tiết tương ứng hiển thị trực tiếp bên dưới (ví dụ chọn Bàn thì hiện cấu hình Thêm/Xóa Bàn nhanh; chọn Thẻ số thì hiện Thêm/Xóa Thẻ nhanh; chọn STT / Bán nhanh / Tên khách thì hiện banner hướng dẫn nghiệp vụ rõ ràng).
+     - Khi nhấn "Lưu Cài Đặt", phát sự kiện thời gian thực `window.dispatchEvent(new CustomEvent("konekt_pos_config_updated", { detail: form }))` để đồng bộ UI POS tức thì mà không cần tải lại trang F5.
+  2. **Tích hợp phím tắt cài đặt trên POS Layout (`PosWorkspaceLayout.tsx`)**:
+     - Đăng ký `useEffect` lắng nghe sự kiện `konekt_open_pos_settings` để hỗ trợ mở nhanh Modal Cài đặt từ bất kỳ nút shortcut nào trên màn hình bán hàng.
+  3. **Tối giản hóa Sidebar Bán hàng POS (`PosOrderPage.tsx`)**:
+     - **Xóa bỏ hoàn toàn khối Loại đơn**:
+       * Không còn box `Loai don (NORMAL)` chiếm diện tích trên cột bán hàng.
+       * Xóa bỏ Modal chọn loại đơn `orderTypePickerOpen` và hàm `resetOfferStateForOrderTypeChange`.
+       * Giữ giá trị mặc định nội bộ `orderType = "NORMAL"` để đảm bảo tương thích 100% với các API backend hiện có mà không phát sinh lỗi.
+     - **Xóa bỏ thanh chọn 5 chế độ nhận món**:
+       * Không còn thanh 5 nút selector làm thu ngân bấm nhầm hoặc bối rối.
+       * Thay thế bằng một Card định danh duy nhất theo mô hình cấu hình của quán:
+         * Có nút shortcut `[⚙️ Cài đặt]` mở nhanh hộp thoại cài đặt mô hình.
+         * Nếu là `Số Bàn`: Hiển thị input bàn + danh sách chip bàn gợi ý nhanh (`Bàn 1`, `Bàn 2`...).
+         * Nếu là `Thẻ Số Để Bàn`: Hiển thị input thẻ + danh sách chip thẻ gợi ý nhanh (`Thẻ 01`, `Thẻ 02`...).
+         * Nếu là `Số Thứ Tự (STT)`: Hiển thị hướng dẫn in bill tự động tăng dần.
+         * Nếu là `Tên & SĐT`: Hiển thị 2 ô nhập Tên và SĐT nhận món.
+         * Nếu là `Bán Nhanh`: Hiển thị thông báo nhận đồ ngay tại quầy.
+     - Lắng nghe sự kiện `konekt_pos_config_updated` để tự động cập nhật `posConfig` và `serviceMode` ngay khi user lưu trong cài đặt.
+* **Files tác động**:
+  - `[CHỈNH SỬA]` `frontend/src/features/pos/components/PosSettingsModal.tsx`
+  - `[CHỈNH SỬA]` `frontend/src/features/pos/layouts/PosWorkspaceLayout.tsx`
+  - `[CHỈNH SỬA]` `frontend/src/features/pos/pages/PosOrderPage.tsx`
+  - `[CHỈNH SỬA]` `docs/Developing/logs/DEV_CHANGELOG.md`
+* **Kết quả Xác minh & Nghiệm thu**:
+  - **Type-Check & Build**: Cả backend và frontend đều biên dịch sạch sẽ (`tsc && vite build` Exit code 0).
+  - **Browser Subagent Visual Test (`pos_config_service_mode_1789014648994.webp`)**:
+    * **Khảo sát POS ban đầu (`pos_main_screen_initial_1789014667110.png`)**: Ô Loại đơn đã biến mất hoàn toàn. Cột bên phải gọn gàng, chỉ có duy nhất khối "🪑 Bàn Phục Vụ (Tại chỗ)" với các chip bàn nhanh và nút `[⚙️ Cài đặt]`.
+    * **Hộp thoại Cài đặt (`pos_settings_modal_1789014684918.png`)**: Tab 1 hiển thị 5 thẻ mô hình kinh doanh trực quan với huy hiệu "1 Mô hình duy nhất".
+    * **Chuyển đổi mô hình thực tế (`pos_main_screen_updated_1789014726800.png`)**: Chọn sang "🏷️ Thẻ Số Để Bàn" -> Bấm "Lưu Cài Đặt" -> Cột bên phải màn hình POS lập tức cập nhật sang "🏷️ Thẻ Số Để Bàn / Thẻ Rung" với các chip gợi ý `Thẻ 01`, `Thẻ 02`... hoàn toàn tự động trong thời gian thực mà không cần F5.
+
+---
+
+### [LOG-008] | 10/09/2026 - TÁI CẤU TRÚC BỐ CỤC GIỎ HÀNG, CỘT KHÁCH HÀNG 3 PHÂN VÙNG, PHẲNG HÓA THỰC ĐƠN & CHIẾT KHẤU THANH TOÁN
+* **Người thực hiện**: Antigravity AI Agent (theo chỉ đạo trực tiếp của Chủ quán).
+* **Tuân thủ**:
+  - `AI_RULES.md`: Quy trình 5 bước nghiêm ngặt, giữ sạch code, chỉ dùng icon trong thư viện Lucide-React, bảo tồn bảng màu thương hiệu xanh rêu sáng `#3D5E46` & kem latte ấm `#FAF7F2`.
+  - Kỹ năng UI/UX: Design Taste Frontend & High-End Visual Design (Chống rập khuôn, tối ưu hóa tốc độ thao tác 1-tap cho thu ngân, phân bổ visual hierarchy rõ ràng).
+* **Bối cảnh & Yêu cầu của Chủ quán**:
+  - *"phần bên giỏ hàng, xóa cái giảm giá nhanh, voucher/promotion thì chuyển qua tab bên khách hàng member thành session 2 giỏ hàng chỉ cần là giỏ hàng có tổng giá trị total vậy thôi, giảm giá nhanh bỏ vào popup thanh toán sau"*
+  - *"thêm vào kế hoạch sửa trang order luôn, hiện đang là 1 món -> nhiều size nhỏ giờ tao muốn sửa thành bỏ cái bọc bên ngoài đi -> mỗi size đóng vai trò là 1 món luôn một item, ảnh tao promt đỡ ra mày hình dung tạm thôi đừng làm theo y chang thay đổi cho phù hợp với hệ thống, với thêm phần tất cả thay vì chỉ lịc theo category"*
+* **Các thay đổi Kỹ thuật Đã Thực Hiện**:
+  1. **Tối Giản Cột Giỏ Hàng (Cart Rail - Cột Trái)**:
+     - Xóa bỏ hoàn toàn khối `Giảm giá nhanh (% Chiết khấu)` và khối `Voucher / Promotion` khỏi cột giỏ hàng.
+     - Giỏ hàng giờ đây thông thoáng, dành tối đa không gian cho danh sách món cuộn thoải mái.
+     - Dưới đáy giỏ hàng là **Khối Tổng giá trị đơn hàng (Cart Summary)** gồm:
+       * Tạm tính (Subtotal).
+       * Chiết khấu (nếu có).
+       * Voucher / Khuyến mãi (nếu có).
+       * Tổng thanh toán (Payable Total) chữ to 20px, font weight 800, màu xanh rêu `#3D5E46`.
+  2. **Tái Cấu Trúc Cột Khách Hàng (Right Rail - Cột Phải) thành 3 Session Rành Mạch**:
+     - **Session 1 (Top)**: Khách hàng / Member (Tra cứu SĐT, tạo khách hàng nhanh, huy hiệu Loyalty).
+     - **Session 2 (Middle - Mới)**: `🎁 Ưu đãi & Khuyến mãi (Voucher / Promotion)` chuyển từ giỏ hàng sang, gồm tab chuyển đổi Voucher / Khuyến mãi, ô nhập mã, nút Áp / Bỏ, và hỗ trợ popup chọn món tặng.
+     - **Session 3 (Bottom)**: `Định danh phục vụ` hiển thị theo đúng 1 mô hình đã được cài đặt của quán (Số bàn, Thẻ số, STT, Tên khách hoặc Bán nhanh) kèm nút mở nhanh cài đặt `[⚙️ Cài đặt]`.
+  3. **Phẳng Hóa Thực Đơn (Flattened Menu Items - 1 Size = 1 Item Card)**:
+     - Bỏ khối bọc sản phẩm to chứa các nút size nhỏ lồng bên trong.
+     - Tạo interface `FlatMenuItem` và hook tính toán phẳng: Mỗi biến thể size `(Product, Variant)` trở thành một Item Card độc lập (VD: `Bạc sỉu - Size S: 29,000đ`, `Bạc sỉu - Size M: 34,000đ`, `Bạc sỉu - Size L: 39,000đ`).
+     - Cơ chế 1-tap: Chạm vào card là thêm ngay vào giỏ hàng mà không cần chọn size qua nhiều bước.
+     - Hiển thị badge số lượng đã chọn trong giỏ `x{qty}` ngay góc trên card.
+     - Chuẩn hóa nhãn size hiển thị đẹp mắt (`Size S`, `Size M`, `Size L`).
+     - Bổ sung tab danh mục đầu tiên: `[ ✨ Tất cả ]` (`key: "ALL"`), mặc định chọn "Tất cả" khi vào trang order.
+  4. **Tích Hợp Khối Giảm Giá Nhanh vào Màn Hình Thanh Toán (`mode === "payment"`)**:
+     - Đặt khối `Giảm giá nhanh (% Chiết khấu: 0%, 5%, 10%, 15%, 20%, 50%, 100% Free)` trực tiếp trong màn hình thanh toán.
+     - Khi thu ngân chọn mức chiết khấu, tổng thanh toán và tiền thối / gợi ý tiền mặt tự động cập nhật ngay lập tức.
+* **Files tác động**:
+  - `[CHỈNH SỬA]` `frontend/src/features/pos/pages/PosOrderPage.tsx`
+  - `[CHỈNH SỬA]` `docs/Developing/plans/PLAN-14_POS_CART_AND_PAYMENT_LAYOUT_RESTRUCTURING.md`
+  - `[CHỈNH SỬA]` `docs/Developing/logs/DEV_CHANGELOG.md`
+* **Kết quả Xác minh & Nghiệm thu**:
+  - **Type-Check & Build**: `npm run build` chạy `tsc && vite build` đạt **Exit code 0**, không còn bất kỳ warning hay lỗi cú pháp nào (`built in 20.66s`).
+  - **Browser Subagent Visual Verification (`pos_acceptance_screen_1789025981677.png` & `pos_payment_step_screen_1789025829462.png`)**:
+    * Màn hình bán hàng chính: Tab `✨ Tất cả` màu xanh rêu sáng hiển thị 30 món dạng phẳng 1-tap, nhãn size chuẩn (`Size S`, `Size M`, `Size L`), giá tiền rõ ràng.
+    * Cột giỏ hàng bên trái: Cực kỳ gọn gàng, khối Cart Summary dưới đáy hiển thị Tạm tính và Tổng thanh toán tách bạch.
+    * Cột khách hàng bên phải: Đầy đủ 3 session riêng biệt, rành mạch.
+    * Màn hình thanh toán: Khối Giảm giá nhanh (%) hoạt động mượt mà ngay trước các tùy chọn thanh toán tiền mặt/chuyển khoản.
+
+---
+
+### [LOG-009] | 10/09/2026 - CHUẨN HÓA 100% ICON THƯ VIỆN LUCIDE-REACT (TUÂN THỦ QUY TẮC 4 TRONG AI_RULES.MD)
+* **Người thực hiện**: Antigravity AI Agent (theo nhắc nhở của User).
+* **Tuân thủ**:
+  - `AI_RULES.md` - Quy tắc số 4: *"Tuyệt đối không dùng icon bên ngoài, chỉ dùng icon có trong thư viện hỗ trợ của JavaScript/React (React SVG components tiêu chuẩn từ lucide-react)"*.
+* **Bối cảnh**:
+  - Người dùng phát hiện một số vị trí UI vẫn còn sử dụng các ký tự Emoji Unicode của hệ điều hành (`✨`, `🎁`, `🏷️`, `🪑`, `🔢`, `👤`, `⚡`, `🏢`, `☕`, `📶`, `💵`, `📱`) thay vì dùng các React SVG component chính thức từ thư viện `lucide-react`.
+* **Các thay đổi Kỹ thuật Đã Thực Hiện**:
+  1. **Quét và loại bỏ sạch sẽ 100% ký tự Emoji Unicode** trong toàn bộ module `features/pos`.
+  2. **Thay thế bằng các React SVG Icon Component từ `lucide-react`**:
+     - `✨ Tất cả` ➔ `<Sparkles size={14} /> Tất cả`.
+     - `🎁 Ưu đãi & Khuyến mãi` ➔ `<Gift size={15} color="#3D5E46" /> Ưu đãi & Khuyến mãi`.
+     - `🏢 Về Quản trị` ➔ `<Building2 size={14} /> Về Quản trị`.
+     - `🪑 Số Bàn` ➔ `<Armchair size={14} color="#3D5E46" />`.
+     - `🏷️ Thẻ Số Để Bàn` ➔ `<Tag size={14} color="#3D5E46" />`.
+     - `🔢 Số Thứ Tự (STT)` ➔ `<Hash size={20} color="#3D5E46" />`.
+     - `👤 Tên & SĐT Khách` ➔ `<User size={20} color="#3D5E46" />`.
+     - `⚡ Bán Nhanh Tại Quầy` ➔ `<Zap size={20} color="#3D5E46" />`.
+     - `📋 Danh Sách Đơn Tạm Giữ` ➔ `<ClipboardList size={22} color="#3D5E46" />`.
+     - `☕ Trạng thái đơn rỗng` ➔ `<Coffee size={40} color="#667064" />`.
+     - `📶 Wi-Fi` ➔ `<Wifi size={12} />`.
+     - `💵 Tiền Mặt` ➔ `<Banknote size={15} />`.
+     - `📱 Chuyển Khoản VietQR` ➔ `<QrCode size={15} />`.
+  3. Cập nhật `SERVICE_MODE_OPTIONS`: Trường `icon: string` chuyển thành `Icon: LucideIcon` để type-safe 100%.
+* **Files tác động**:
+  - `[CHỈNH SỬA]` `frontend/src/features/pos/pages/PosOrderPage.tsx`
+  - `[CHỈNH SỬA]` `frontend/src/features/pos/components/PosSettingsModal.tsx`
+  - `[CHỈNH SỬA]` `frontend/src/features/pos/pages/PosHeldOrdersPage.tsx`
+  - `[CHỈNH SỬA]` `frontend/src/features/pos/components/PosReceiptModal.tsx`
+  - `[CHỈNH SỬA]` `frontend/src/features/pos/pages/PosPickupSelectPage.tsx`
+  - `[CHỈNH SỬA]` `frontend/src/features/pos/pages/PosDashboardPage.tsx`
+  - `[CHỈNH SỬA]` `docs/Developing/logs/DEV_CHANGELOG.md`
+* **Kết quả Xác minh & Nghiệm thu**:
+  - **Kiểm tra tự động**: Quét Regex Unicode `[\uD83C-\uDBFF\uDC00-\uDFFF\u2600-\u27BF]` trong toàn bộ `frontend/src/features/pos` không còn kết quả nào (100% sạch).
+  - **Type-Check & Build**: `npm run build` đạt **Exit code 0** sạch sẽ trong `12.42s`.
+  - **Browser Subagent Visual Verification (`pos_icons_verification_1789026484528.png`)**: Toàn bộ icon hiển thị dạng vector SVG sắc nét, đồng bộ phong cách thiết kế cao cấp của `lucide-react`.
+
+---
+
+### [LOG-010] | 10/09/2026 - HOÀN THIỆN ONBOARDING NHÂN VIÊN, PHÂN CẤP 3 ROLES (STAFF/LEADER/MANAGER) VÀ TÁI THIẾT KẾ STAFF PORTAL
+* **Người thực hiện**: Antigravity AI Agent (theo chỉ đạo trực tiếp của Chủ quán).
+* **Tuân thủ**:
+  - `AI_RULES.md`: Quy trình 5 bước nghiêm ngặt, giữ sạch code, chỉ dùng icon trong thư viện `lucide-react` (100% SVG, không dùng emoji unicode), bảo tồn bảng màu thương hiệu xanh rêu đậm `#364D39` / sáng `#3D5E46` & kem latte ấm `#FAF7F2` (nền card `#FFFFFF`, viền `#DFD6C7`).
+  - Kỹ năng Database: `supabase-postgres-best-practices` & `supabase` (quản lý enum migration, RLS & Row-Level multi-tenancy).
+  - Kỹ năng UI/UX: `design-taste-frontend` & `minimalist-ui` (visual hierarchy cao cấp, anti-slop, các launcher 1-tap, tối ưu hóa thao tác nghiệp vụ F&B thực chiến).
+* **Bối cảnh & Yêu cầu của Chủ quán**:
+  - *"tạm thời bỏ trang pos đó đi, giờ tao muốn xây dựng giao diện cho staff login vào, chia role staff, leader,manager với nhiều tính năng khác nhau, staff tự tạo account -> owner đưa mã cửa hàng -> staff nhập mã và gửi request -> owner duyệt và phân role ngay lúc duyệt -> trang staff sẽ có các tính năng đã được tích hợp sẵn có(đoạn này hãy coi lại các tính năng trong hệ thống và xây lại cho đúng với nghiệp vụ một account staff cần có), kế hoạch nên ưu tiên sử dụng lại code cũ và có cả phát triển luôn db"*
+* **Các thay đổi Kỹ thuật Đã Thực Hiện**:
+  1. **Nâng cấp Cơ sở dữ liệu Supabase Postgres & ORM Schema**:
+     - Cập nhật `backend/src/db/schema.ts`: Bổ sung `'shift_leader'` vào `userRoleEnum` (`['platform_admin', 'owner', 'store_manager', 'shift_leader', 'staff', 'customer']`).
+     - Tạo và chạy thành công script di trú an toàn `backend/src/scripts/migrate_plan15_shift_leader.ts`:
+       `ALTER TYPE public.user_role ADD VALUE IF NOT EXISTS 'shift_leader' BEFORE 'staff';`
+       Script thực thi trực tiếp trên database Supabase Postgres 17.6 với Exit code 0, không ảnh hưởng tới dữ liệu cũ.
+  2. **Backend Architecture, Security & Role Hierarchy**:
+     - Cập nhật `backend/src/middlewares/roleGuard.ts`: Thiết lập Role Hierarchy 5 bậc: `customer (0) < staff (1) < shift_leader (2) < store_manager (3) < owner (4) < platform_admin (5)`.
+     - Cập nhật `backend/src/modules/auth/konektAuth.service.ts`:
+       * Thêm `registerStaff`: Cho phép nhân viên tự tạo tài khoản cá nhân độc lập với mật khẩu băm an toàn qua `bcrypt`, trả về `requireStoreJoin: true`.
+       * Cập nhật `loginKonekt`: Kiểm tra `user.storeId`, nếu chưa gán chi nhánh hoặc đang có bản ghi trong `store_join_requests` với trạng thái `pending`, trả về thông tin `pendingRequest` và `requireStoreJoin: true`.
+       * Gán portal đích `"STORE"` (`/store/staff`) cho cả `staff` và `shift_leader`.
+     - Cập nhật `backend/src/modules/auth/auth.controller.ts` & `auth.routes.ts`: Đăng ký endpoint `POST /api/auth/register-staff`.
+     - Cập nhật `backend/src/modules/workspace/workspace.types.ts`: Bổ sung `defaultLeader?: boolean` vào định nghĩa quyền hạt nhân và cập nhật danh sách quyền mặc định trong `getDefaultPermissionsForRole`.
+     - Cập nhật `backend/src/modules/workspace/workspace.service.ts`: Nâng cấp `approveStoreJoinRequest` chấp nhận gán vai trò `"store_manager" | "shift_leader" | "staff"`, tự động cập nhật `tenantId`, `storeId`, `role` và gán bảng quyền tương ứng trong transaction.
+  3. **Frontend Flow: Đăng ký Nhân viên & Nhập mã Cửa hàng**:
+     - `frontend/src/features/auth/pages/StaffRegisterPage.tsx`:
+       * Trang đăng ký tài khoản nhân viên tại route `/register/staff`.
+       * Thiết kế thẩm mỹ KONEKT: Nền kem ấm, card trắng viền bo tinh tế, 100% SVG Lucide icons (`User`, `Mail`, `Lock`, `Phone`, `ArrowRight`, `Sparkles`).
+       * Tích hợp link chuyển đổi linh hoạt: "Bạn là Chủ quán muốn mở cửa hàng mới? Đăng ký mở quán tại đây" và "Đã có tài khoản? Đăng nhập ngay".
+     - `frontend/src/features/workspace/pages/StaffJoinStorePage.tsx`:
+       * Trang nhập mã chi nhánh tại route `/workspace/join-store`.
+       * Tự động xác thực mã cửa hàng (`workspaceApi.verifyStoreInvite`) khi người dùng nhập đủ mã: Hiển thị ngay thẻ thông tin chi nhánh (Tên thương hiệu, Tên chi nhánh, Địa chỉ, SĐT).
+       * Biểu mẫu gửi yêu cầu với vị trí ứng tuyển ("Nhân viên pha chế", "Nhân viên thu ngân", "Nhân viên phục vụ", "Trưởng ca dự thính...") và lời nhắn gửi Chủ quán.
+       * Tích hợp chế độ **Chờ Phê Duyệt (Pending State)**: Khi đã gửi yêu cầu, hiển thị huy hiệu thẻ chờ duyệt trang nhã kèm thông tin chi nhánh, mã yêu cầu, ngày gửi và nút "Kiểm tra trạng thái duyệt".
+     - `frontend/src/features/auth/pages/MerchantLoginPage.tsx`: Tự động nhận diện `requireStoreJoin` và chuyển hướng nhân viên sang `/workspace/join-store`, bổ sung link đăng ký nhân viên mới dưới footer.
+  4. **Nâng cấp Giao diện Duyệt Phân Quyền của Chủ Quán (Owner HR Hub)**:
+     - `frontend/src/features/office/hr/pages/StaffJoinRequestsPage.tsx`:
+       * Đại tu Modal Phê Duyệt thành 3 tùy chọn Role trực quan với màu sắc và huy hiệu nhận diện rõ rệt:
+         1. ☕ **Nhân viên (Staff)** - Huy hiệu Xanh rêu: Chấm công, Bán hàng POS, Bếp KDS, Kiểm kho ca làm.
+         2. 🛡️ **Trưởng ca (Shift Leader)** - Huy hiệu Vàng hổ phách: Quyền Staff + Chốt ca kiểm quỹ, Phê duyệt phiếu ca làm, Xử lý chiết khấu.
+         3. 🏪 **Quản lý cửa hàng (Store Manager)** - Huy hiệu Xanh tím: Quyền toàn diện chi nhánh, Phân ca, Báo cáo doanh thu, Giám sát vận hành.
+       * Cho phép xem trước danh sách chi tiết các quyền hạn hạt nhân (Permissions) sẽ được cấp cho nhân viên ngay trong modal trước khi bấm "Xác Nhận & Phân Quyền".
+  5. **Tái Thiết Kế & Nâng Cấp Toàn Diện Cổng Nhân Viên (Staff Portal - Cockpit)**:
+     - `frontend/src/features/staff/pages/StaffDashboardPage.tsx`:
+       * **Thanh Header & Trạng Thái Ca Làm**: Hiển thị tên nhân viên, huy hiệu vai trò (`Nhân viên` / `Trưởng ca` / `Quản lý`), chi nhánh trực thuộc, trạng thái ca làm hiện tại (Đã Check-in / Chưa Check-in).
+       * **Bảng Phóng Tác Vụ 1-Tap (Quick Operational Launchers)**:
+         - 🛒 **Mở POS Bán Hàng** (`/pos/order`): Vào thẳng màn hình bán lẻ phẳng 1-tap.
+         - 🍳 **Màn Hình Bếp KDS** (`/pos/kds`): Xem vé order thời gian thực theo trạm pha chế/bếp.
+         - 💰 **Kiểm Quỹ & Chốt Ca** (`/pos/shift-reconciliation`): Nổi bật dành cho Trưởng ca và Quản lý để kiểm đếm tiền mặt, nhập số dư thực tế và in biên bản chốt ca.
+       * **Bộ Thẻ Tác Vụ Nghiệp Vụ Thực Chiến (Operational Bento Grid)**:
+         - ⏰ **Chấm công & Ca làm**: Check-in / Check-out GPS/IP 1 chạm, đếm giờ làm việc, hiển thị ca làm hôm nay.
+         - 📅 **Lịch làm việc cá nhân**: Lưới lịch trực quan, xem ca sắp tới và nút gửi yêu cầu xin nghỉ/đổi ca.
+         - 📦 **Nghiệp vụ Kho ca làm**: Kiểm kê tồn kho cuối ca (`/store/inventory/stocktake`), Nhập nguyên liệu vào ca (`/store/inventory/import`), Báo hủy hàng hỏng/hết hạn (`/store/inventory/waste`).
+         - 🛡️ **Bàn Phê Duyệt Trưởng Ca (Shift Leader Approvals)**: Tự động hiển thị khi đăng nhập với vai trò Trưởng ca/Quản lý để duyệt phiếu kiểm kho, phiếu nhập hàng và các yêu cầu trong ca.
+         - 💵 **Bảng lương & Thu nhập**: Tra cứu số giờ công tích lũy, lương tạm tính theo ca và lịch sử thanh toán.
+  6. **Cập nhật Router & State Management**:
+     - `frontend/src/app/store/auth.store.ts`: Hỗ trợ role `shift_leader` chuyển hướng về `/store/staff`.
+     - `frontend/src/app/router/index.tsx`: Đăng ký 2 routes mới `/register/staff` và `/workspace/join-store`.
+* **Files tác động**:
+  - `[CHỈNH SỬA]` `backend/src/db/schema.ts`
+  - `[TẠO MỚI]` `backend/src/scripts/migrate_plan15_shift_leader.ts`
+  - `[CHỈNH SỬA]` `backend/src/middlewares/roleGuard.ts`
+  - `[CHỈNH SỬA]` `backend/src/modules/auth/konektAuth.service.ts`
+  - `[CHỈNH SỬA]` `backend/src/modules/auth/auth.controller.ts`
+  - `[CHỈNH SỬA]` `backend/src/modules/auth/auth.routes.ts`
+  - `[CHỈNH SỬA]` `backend/src/modules/workspace/workspace.types.ts`
+  - `[CHỈNH SỬA]` `backend/src/modules/workspace/workspace.service.ts`
+  - `[CHỈNH SỬA]` `frontend/src/features/auth/api/auth.api.ts`
+  - `[CHỈNH SỬA]` `frontend/src/features/workspace/api/workspace.api.ts`
+  - `[TẠO MỚI]` `frontend/src/features/auth/pages/StaffRegisterPage.tsx`
+  - `[TẠO MỚI]` `frontend/src/features/workspace/pages/StaffJoinStorePage.tsx`
+  - `[CHỈNH SỬA]` `frontend/src/features/auth/pages/MerchantLoginPage.tsx`
+  - `[CHỈNH SỬA]` `frontend/src/features/office/hr/pages/StaffJoinRequestsPage.tsx`
+  - `[CHỈNH SỬA]` `frontend/src/features/staff/pages/StaffDashboardPage.tsx`
+  - `[CHỈNH SỬA]` `frontend/src/app/store/auth.store.ts`
+  - `[CHỈNH SỬA]` `frontend/src/app/router/index.tsx`
+  - `[CHỈNH SỬA]` `docs/Requirements/REQ-15_STAFF_ONBOARDING_ROLE_PORTAL.md`
+  - `[CHỈNH SỬA]` `docs/Developing/plans/PLAN-15_STAFF_ONBOARDING_ROLE_PORTAL.md`
+  - `[CHỈNH SỬA]` `docs/Developing/logs/DEV_CHANGELOG.md`
+* **Kết quả Xác minh & Nghiệm thu**:
+  - **Type-Check & Build**:
+    * Backend: `npx tsc --noEmit` hoàn thành với **Exit code 0** (0 lỗi TypeScript).
+    * Frontend: `npx tsc --noEmit` hoàn thành với **Exit code 0** (0 lỗi TypeScript).
+  - **Browser Subagent Visual Verification**:
+    * `staff_register_page_1789029293000.png`: Màn hình Đăng ký nhân viên tại `/register/staff` tải mượt mà, đầy đủ các trường dữ liệu và liên kết chuyển đổi.
+    * `staff_join_store_page_1789029418711.png`: Màn hình Nhập mã cửa hàng tại `/workspace/join-store` tự động nhận diện mã `STR-001-69EE`, hiển thị thẻ chi nhánh *KONEKT Coffee - Trụ sở chính*, gửi yêu cầu gia nhập và hiển thị trạng thái chờ duyệt.
+    * `owner_hr_requests_page_1789029065682.png` & `owner_hr_requests_final_1789029099195.png`: Màn hình Chủ quán duyệt nhân sự hiển thị modal phân vai trò 3 cấp (`staff`, `shift_leader`, `store_manager`) kèm danh sách quyền hạt nhân rõ ràng.
+    * `staff_portal_page_1789029051210.png`: Staff Portal cockpit hiển thị trực quan các nút tác vụ nhanh (Mở POS, Mở Bếp KDS, Kiểm quỹ) và bộ widget chấm công, lịch làm, kiểm kho, bảng lương.
+
 

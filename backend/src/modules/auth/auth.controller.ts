@@ -254,9 +254,23 @@ export const officeResetPassword = asyncHandler(
 // ── KONEKT Multi-Tenant Endpoints ──
 import {
   registerOwner,
+  registerStaff,
   loginKonekt as loginKonektService,
   demoLogin as demoLoginService,
 } from "./konektAuth.service";
+
+export const registerStaffHandler = asyncHandler(
+  async (req: Request, res: Response) => {
+    const { fullName, email, password, phone } = req.body;
+    const result = await registerStaff({
+      fullName,
+      email,
+      password,
+      phone,
+    });
+    res.status(201).json(result);
+  }
+);
 
 export const registerOwnerHandler = asyncHandler(
   async (req: Request, res: Response) => {

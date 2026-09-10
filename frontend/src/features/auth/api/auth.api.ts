@@ -118,10 +118,17 @@ export const authApi = {
     address?: string;
   }) => api.post("/auth/register-owner", payload).then((r) => r.data),
 
+  registerStaff: (payload: {
+    fullName: string;
+    email: string;
+    password: string;
+    phone?: string;
+  }) => api.post("/auth/register-staff", payload).then((r) => r.data),
+
   loginKonekt: (payload: { identifier: string; password: string }) =>
     api.post("/auth/login-konekt", payload).then((r) => r.data),
 
-  demoLogin: (role: "owner" | "manager" | "staff") =>
+  demoLogin: (role: "owner" | "manager" | "leader" | "staff") =>
     api.post("/auth/demo-login", { role }).then((r) => r.data),
 };
 

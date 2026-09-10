@@ -1,5 +1,18 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
+import {
+  Sliders,
+  Armchair,
+  Tag,
+  Hash,
+  User,
+  Zap,
+  Sparkles,
+  Gift,
+  Building2,
+  Layers,
+  type LucideIcon,
+} from "lucide-react";
 import { useAuthStore, isOwnerOrAdmin } from "../../../app/store/auth.store";
 import {
   posGetMenu,
@@ -155,6 +168,40 @@ function getOrderTypeLabel(orderType: OrderType) {
   }
 }
 
+function getServiceModeIcon(mode: string): LucideIcon {
+  switch (mode) {
+    case "table":
+      return Armchair;
+    case "table_marker":
+      return Tag;
+    case "queue_number":
+      return Hash;
+    case "customer_name":
+      return User;
+    case "none":
+      return Zap;
+    default:
+      return Layers;
+  }
+}
+
+function getServiceModeDisplayTitle(mode: string) {
+  switch (mode) {
+    case "table":
+      return "Bàn Phục Vụ (Tại chỗ)";
+    case "table_marker":
+      return "Thẻ Số Để Bàn / Thẻ Rung";
+    case "queue_number":
+      return "Số Thứ Tự (STT) Tự Động";
+    case "customer_name":
+      return "Tên & SĐT Khách Hàng";
+    case "none":
+      return "Bán Nhanh Tại Quầy (Takeaway)";
+    default:
+      return "Phục Vụ & Định Danh";
+  }
+}
+
 function LoyaltyStatusHint(props: { hasMember: boolean }) {
   const { hasMember } = props;
 
@@ -267,11 +314,7 @@ function getComboDisplayNameFromRule(
   return rule.name || "Combo ưu đãi";
 }
 
-function getVariantGridColumns(count: number) {
-  if (count <= 1) return "1fr";
-  if (count === 2) return "repeat(2, minmax(0, 1fr))";
-  return "repeat(3, minmax(0, 1fr))";
-}
+
 
 export default function PosOrderPage() {
   const nav = useNavigate();
@@ -298,7 +341,7 @@ export default function PosOrderPage() {
 
   const [cats, setCats] = useState<MenuCategory[]>([]);
   const [combos, setCombos] = useState<MenuCombo[]>([]);
-  const [activeCat, setActiveCat] = useState<string>("COFFEE");
+  const [activeCat, setActiveCat] = useState<string>("ALL");
   const [loadingMenu, setLoadingMenu] = useState(false);
   const [search, setSearch] = useState("");
 
@@ -323,7 +366,6 @@ export default function PosOrderPage() {
     specialModeHint ? "TEST" : "NORMAL"
   );
   const [specialNote, setSpecialNote] = useState("");
-  const [orderTypePickerOpen, setOrderTypePickerOpen] = useState(false);
 
   const [offerMode, setOfferMode] = useState<"voucher" | "promotion">(
     "voucher"
@@ -412,28 +454,39 @@ export default function PosOrderPage() {
     refetchInterval: 2000,
   });
 
-  // Load POS Settings Config from storage & API
+  // Load POS Settings Config from storage & API + Realtime update listener
   useEffect(() => {
+    const applyConfig = (cfg: Partial<PosSettingsData>) => {
+      setPosConfig((prev) => ({ ...prev, ...cfg }));
+      if (cfg.defaultServiceMode) {
+        setServiceMode(cfg.defaultServiceMode);
+      }
+    };
+
     const cached = localStorage.getItem("konekt_pos_config");
     if (cached) {
       try {
         const parsed = JSON.parse(cached);
-        setPosConfig((prev) => ({ ...prev, ...parsed }));
-        if (parsed.defaultServiceMode) {
-          setServiceMode(parsed.defaultServiceMode);
-        }
+        applyConfig(parsed);
       } catch (e) {}
     }
     posGetStoreConfig()
       .then((res) => {
         if (res?.ok && res.config) {
-          setPosConfig((prev) => ({ ...prev, ...res.config }));
-          if (res.config.defaultServiceMode && !cached) {
-            setServiceMode(res.config.defaultServiceMode);
-          }
+          applyConfig(res.config);
         }
       })
       .catch(() => {});
+
+    const handleConfigUpdated = (e: any) => {
+      if (e?.detail) {
+        applyConfig(e.detail);
+      }
+    };
+    window.addEventListener("konekt_pos_config_updated", handleConfigUpdated);
+    return () => {
+      window.removeEventListener("konekt_pos_config_updated", handleConfigUpdated);
+    };
   }, []);
 
   useEffect(() => {
@@ -449,12 +502,7 @@ export default function PosOrderPage() {
         setCats(menuRes.categories || []);
         setCombos(menuRes.combos || []);
 
-        const hasCoffee = (menuRes.categories || []).some(
-          (c) => c.key === "COFFEE"
-        );
-        setActiveCat(
-          hasCoffee ? "COFFEE" : menuRes.categories?.[0]?.key || "COFFEE"
-        );
+        setActiveCat("ALL");
 
         const current = shiftRes.current;
         if (!current) {
@@ -907,37 +955,47 @@ export default function PosOrderPage() {
     return activeCategory;
   };
 
-  const allProductsFiltered = useMemo(() => {
+  interface FlatMenuItem {
+    variantId: number;
+    productId?: number;
+    productName: string;
+    size: string;
+    price: number;
+    sku?: string;
+    categoryKey: string;
+    categoryName: string;
+  }
+
+  const flatMenuItems = useMemo<FlatMenuItem[]>(() => {
+    const list: FlatMenuItem[] = [];
+    const targetCats =
+      activeCat === "ALL"
+        ? cats
+        : cats.filter((c) => c.key === activeCat);
     const q = search.trim().toLowerCase();
-    if (!q) return null;
 
-    const out: Array<{
-      categoryKey: string;
-      productId?: number;
-      productName: string;
-      variants: MenuVariant[];
-    }> = [];
-
-    for (const c of cats) {
+    for (const c of targetCats) {
       for (const p of c.products) {
-        const matchedVariants = p.variants.filter((v) => {
-          const hay = `${p.name} ${v.size} ${v.sku || ""}`.toLowerCase();
-          return hay.includes(q);
-        });
-
-        if (matchedVariants.length) {
-          out.push({
-            categoryKey: c.key,
+        for (const v of p.variants) {
+          if (q) {
+            const hay = `${p.name} ${v.size} ${v.sku || ""} ${c.name || ""}`.toLowerCase();
+            if (!hay.includes(q)) continue;
+          }
+          list.push({
+            variantId: v.id,
             productId: p.id,
             productName: p.name,
-            variants: matchedVariants,
+            size: v.size,
+            price: v.price,
+            sku: v.sku,
+            categoryKey: c.key,
+            categoryName: c.name || CATEGORY_LABEL[c.key] || c.key,
           });
         }
       }
     }
-
-    return out;
-  }, [cats, search]);
+    return list;
+  }, [cats, activeCat, search]);
 
   const cartVariantIds = useMemo(() => {
     const s = new Set<number>();
@@ -1116,18 +1174,6 @@ export default function PosOrderPage() {
     setSuggestedRules([]);
     setSelectedAppliedRules([]);
     setComboCart({});
-  };
-
-  const resetOfferStateForOrderTypeChange = () => {
-    setAppliedOfferCode("");
-    setOfferCode("");
-    setSelectedGiftItems([]);
-    setGiftPickerOpen(false);
-    setGiftPickerQtyMap({});
-    setGiftPickerNotes({});
-    setPricingPreview(null);
-    setPaymentChecked(false);
-    setError(null);
   };
 
   const addVariant = (
@@ -2276,9 +2322,9 @@ export default function PosOrderPage() {
     };
 
   const railPanelStyle = {
-    border: "1px solid #e6dfd5",
+    border: "1px solid #DFD6C7",
     borderRadius: 16,
-    background: "#fff",
+    background: "#FAF7F2",
     padding: 14,
     minWidth: 0,
   };
@@ -2326,6 +2372,7 @@ export default function PosOrderPage() {
   const railSectionTitleStyle = {
     fontWeight: 700,
     marginBottom: 8,
+    color: "#213224",
   };
 
   const railHelpTextStyle = {
@@ -2347,15 +2394,16 @@ export default function PosOrderPage() {
     height: 56,
     padding: "0 14px",
     borderRadius: 14,
-    border: "1px solid #ddd",
+    border: "1px solid #DFD6C7",
     fontSize: 14,
+    background: "#FAF7F2",
   };
 
   const pillStyle = {
     padding: "6px 10px",
     borderRadius: 999,
-    border: "1px solid #e6dfd5",
-    background: "#faf8f5",
+    border: "1px solid #DFD6C7",
+    background: "#EBE3D7",
     fontSize: 12,
     fontWeight: 600,
   };
@@ -2410,11 +2458,11 @@ export default function PosOrderPage() {
     width: "100%",
     height: 52,
     padding: "0 14px",
-    border: "1px solid #d9d1c7",
+    border: "1px solid #DFD6C7",
     borderRadius: 12,
     outline: "none",
     fontSize: 14,
-    background: "#fff",
+    background: "#FAF7F2",
   };
 
   const categoryRowStyle = {
@@ -2426,10 +2474,11 @@ export default function PosOrderPage() {
 
   const categoryButtonBaseStyle = {
     flex: "0 0 auto",
-    border: "1px solid #ddd",
+    border: "1px solid #DFD6C7",
     padding: "8px 14px",
     borderRadius: 999,
-    background: "#fff",
+    background: "#FAF7F2",
+    color: "#213224",
     fontWeight: 500,
     whiteSpace: "nowrap" as const,
   };
@@ -2444,58 +2493,18 @@ export default function PosOrderPage() {
 
   const productGridStyle = {
     display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(250px, 1fr))",
-    gap: 12,
+    gridTemplateColumns: "repeat(auto-fill, minmax(180px, 1fr))",
+    gap: 10,
     alignContent: "start" as const,
   };
 
-  const productCardStyle = {
-    border: "1px solid #e6dfd5",
-    borderRadius: 16,
-    padding: 14,
-    background: "#fff",
-    display: "flex",
-    flexDirection: "column" as const,
-    gap: 12,
-    minHeight: 138,
-  };
-
-  const productTitleStyle = {
-    fontWeight: 700,
-    fontSize: 17,
-    lineHeight: 1.32,
-    minHeight: 42,
-  };
-
-  const variantGroupStyle = {
-    display: "grid",
-    gap: 8,
-    marginTop: "auto",
-  };
-
-  const variantButtonStyle = {
-    width: "100%",
-    minHeight: 62,
-    padding: "10px 8px",
-    borderRadius: 12,
-    border: "1px solid #ddd",
-    background: "#fff",
-    fontWeight: 700,
-    display: "flex",
-    flexDirection: "column" as const,
-    alignItems: "center",
-    justifyContent: "center",
-    textAlign: "center" as const,
-    lineHeight: 1.15,
-    gap: 4,
-  };
 
   const actionBarStyle = {
     display: "grid",
     gridTemplateColumns: "repeat(6, minmax(0, 1fr))",
     gap: 8,
     paddingTop: 12,
-    borderTop: "1px solid #ece7df",
+    borderTop: "1px solid #DFD6C7",
     flexShrink: 0,
   };
 
@@ -2509,17 +2518,17 @@ export default function PosOrderPage() {
 
   const primaryActionButtonStyle = {
     ...actionButtonStyle,
-    background: "#6f5846",
+    background: "#3D5E46",
     color: "#fff",
-    border: "1px solid #6f5846",
+    border: "1px solid #3D5E46",
     fontWeight: 700,
   };
 
   const emptyStateStyle = {
     padding: 16,
-    border: "1px dashed #d8cfc3",
+    border: "1px dashed #D2C7B8",
     borderRadius: 12,
-    background: "#faf8f5",
+    background: "#EBE3D7",
     color: "#6b5b4d",
   };
 
@@ -2537,8 +2546,8 @@ export default function PosOrderPage() {
                 <button
                   onClick={() => nav("/office/dashboard")}
                   style={{
-                    background: "#2B402D",
-                    color: "#FAF6F3",
+                    background: "#3D5E46",
+                    color: "#FAF7F2",
                     fontWeight: 700,
                     borderRadius: 8,
                     padding: "6px 12px",
@@ -2547,7 +2556,9 @@ export default function PosOrderPage() {
                     fontSize: 13,
                   }}
                 >
-                  🏢 Về Quản trị
+                  <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                    <Building2 size={14} /> Về Quản trị
+                  </span>
                 </button>
               )}
               <h2 className="pos-topbar__title" style={{ margin: 0 }}>
@@ -2567,14 +2578,17 @@ export default function PosOrderPage() {
                 gap: 6,
                 padding: "6px 14px",
                 borderRadius: 10,
-                backgroundColor: "#EBF1EB",
-                border: "1px solid #C4BDAC",
+                backgroundColor: "#E3ECE4",
+                border: "1px solid #DFD6C7",
                 fontSize: 13,
                 fontWeight: 700,
-                color: "#1E2C20",
+                color: "#27402F",
               }}
             >
-              <span>{SERVICE_MODE_OPTIONS.find((m) => m.id === serviceMode)?.icon || "🪑"}</span>
+              {(() => {
+                const ModeIcon = getServiceModeIcon(serviceMode);
+                return <ModeIcon size={14} color="#3D5E46" />;
+              })()}
               <span>
                 {SERVICE_MODE_OPTIONS.find((m) => m.id === serviceMode)?.label || "Số Bàn"}
                 {serviceIdentifier ? `: ${serviceIdentifier}` : ""}
@@ -2650,16 +2664,37 @@ export default function PosOrderPage() {
                 </div>
 
                 <div style={categoryRowStyle}>
+                  <button
+                    key="ALL"
+                    type="button"
+                    onClick={() => setActiveCat("ALL")}
+                    disabled={orderBlocked || editingLocked}
+                    style={
+                      activeCat === "ALL"
+                        ? {
+                            ...categoryButtonBaseStyle,
+                            border: "1px solid #3D5E46",
+                            background: "#3D5E46",
+                            color: "#fff",
+                            fontWeight: 700,
+                          }
+                        : categoryButtonBaseStyle
+                    }
+                  >
+                    <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                      <Sparkles size={14} /> Tất cả
+                    </span>
+                  </button>
                   {cats.map((c) => {
                     const activeStyle =
                       c.key === activeCat
                         ? {
-                          ...categoryButtonBaseStyle,
-                          border: "1px solid #6f5846",
-                          background: "#6f5846",
-                          color: "#fff",
-                          fontWeight: 700,
-                        }
+                            ...categoryButtonBaseStyle,
+                            border: "1px solid #3D5E46",
+                            background: "#3D5E46",
+                            color: "#fff",
+                            fontWeight: 700,
+                          }
                         : categoryButtonBaseStyle;
 
                     return (
@@ -2687,114 +2722,106 @@ export default function PosOrderPage() {
                     }}
                   >
                     <h3 style={{ margin: 0 }}>
-                      {allProductsFiltered
-                        ? "Ket qua tim kiem"
+                      {search.trim()
+                        ? "Kết quả tìm kiếm"
+                        : activeCat === "ALL"
+                        ? "Tất cả thực đơn"
                         : active?.name || CATEGORY_LABEL[activeCat] || activeCat}
                     </h3>
 
                     <div style={{ fontSize: 13, color: "#6b5b4d" }}>
-                      {allProductsFiltered
-                        ? `${allProductsFiltered.length} mon`
-                        : `${active?.products?.length || 0} mon`}
+                      {flatMenuItems.length} món
                     </div>
                   </div>
 
-                  {allProductsFiltered ? (
-                    allProductsFiltered.length > 0 ? (
-                      <div style={productGridStyle}>
-                        {allProductsFiltered.map((p) => (
-                          <div
-                            key={`${p.categoryKey}-${p.productId}-${p.productName}`}
-                            style={productCardStyle}
-                          >
-                            <div style={productTitleStyle}>{p.productName}</div>
-                            <div
-                              style={{
-                                fontSize: 13,
-                                color: "#6b5b4d",
-                                marginTop: 4,
-                              }}
-                            >
-                              {CATEGORY_LABEL[p.categoryKey] || p.categoryKey}
-                            </div>
-
-                            <div
-                              style={{
-                                ...variantGroupStyle,
-                                gridTemplateColumns: getVariantGridColumns(
-                                  p.variants.length
-                                ),
-                              }}
-                            >
-                              {p.variants.map((v) => (
-                                <button
-                                  key={v.id}
-                                  onClick={() =>
-                                    addVariant(
-                                      cartCategoryKeyForProduct(
-                                        p.categoryKey,
-                                        p.productId
-                                      ),
-                                      p.productName,
-                                      v
-                                    )
-                                  }
-                                  style={variantButtonStyle}
-                                  disabled={orderBlocked || editingLocked}
-                                >
-                                  <span style={{ fontSize: 15 }}>{v.size}</span>
-                                  <span style={{ fontSize: 15 }}>
-                                    {v.price.toLocaleString()}d
-                                  </span>
-                                </button>
-                              ))}
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    ) : (
-                      <div style={emptyStateStyle}>Khong tim thay mon phu hop.</div>
-                    )
-                  ) : !active ? (
-                    <div style={emptyStateStyle}>Khong co du lieu</div>
-                  ) : active.products.length === 0 ? (
-                    <div style={emptyStateStyle}>Danh muc nay chua co mon.</div>
+                  {flatMenuItems.length === 0 ? (
+                    <div style={emptyStateStyle}>
+                      {search.trim() ? "Không tìm thấy món phù hợp." : "Danh mục này chưa có món."}
+                    </div>
                   ) : (
                     <div style={productGridStyle}>
-                      {active.products.map((p) => (
-                        <div key={p.id || p.name} style={productCardStyle}>
-                          <div style={productTitleStyle}>{p.name}</div>
+                      {flatMenuItems.map((item) => {
+                        const inCartQty = cart[String(item.variantId)]?.qty || 0;
+                        const isSelected = inCartQty > 0;
 
+                        return (
                           <div
+                            key={`${item.variantId}-${item.size}`}
+                            onClick={() => {
+                              if (orderBlocked || editingLocked) return;
+                              const v: MenuVariant = {
+                                id: item.variantId,
+                                size: item.size,
+                                price: item.price,
+                                sku: item.sku,
+                              };
+                              addVariant(
+                                cartCategoryKeyForProduct(item.categoryKey, item.productId),
+                                item.productName,
+                                v
+                              );
+                            }}
                             style={{
-                              ...variantGroupStyle,
-                              gridTemplateColumns: getVariantGridColumns(
-                                p.variants.length
-                              ),
+                              backgroundColor: "#FAF7F2",
+                              border: isSelected ? "1.5px solid #3D5E46" : "1px solid #DFD6C7",
+                              borderRadius: 14,
+                              padding: "12px 14px",
+                              display: "flex",
+                              flexDirection: "column",
+                              justifyContent: "space-between",
+                              minHeight: 92,
+                              cursor: orderBlocked || editingLocked ? "not-allowed" : "pointer",
+                              transition: "all 0.15s cubic-bezier(0.32, 0.72, 0, 1)",
+                              boxShadow: isSelected ? "0 2px 8px rgba(61,94,70,0.12)" : "0 1px 2px rgba(0,0,0,0.02)",
+                              position: "relative",
+                              userSelect: "none",
                             }}
                           >
-                            {p.variants.map((v) => (
-                              <button
-                                key={v.id}
-                                onClick={() =>
-                                  addVariant(
-                                    cartCategoryKeyForProduct(activeCat, p.id),
-                                    p.name,
-                                    v
-                                  )
-                                }
-                                style={variantButtonStyle}
-                                disabled={orderBlocked || editingLocked}
-                              >
-                                <span style={{ fontSize: 15 }}>{v.size}</span>
-                                <span style={{ fontSize: 15 }}>
-                                  {v.price.toLocaleString()}d
+                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 6 }}>
+                              <div style={{ fontWeight: 700, fontSize: 14, color: "#213224", lineHeight: 1.3 }}>
+                                {item.productName}
+                              </div>
+                              {isSelected ? (
+                                <span
+                                  style={{
+                                    backgroundColor: "#3D5E46",
+                                    color: "#FFFFFF",
+                                    fontSize: 11,
+                                    fontWeight: 700,
+                                    borderRadius: 999,
+                                    padding: "2px 7px",
+                                    lineHeight: 1,
+                                    flexShrink: 0,
+                                  }}
+                                >
+                                  x{inCartQty}
                                 </span>
-                              </button>
-                            ))}
+                              ) : null}
+                            </div>
+
+                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 10 }}>
+                              <span
+                                style={{
+                                  display: "inline-flex",
+                                  alignItems: "center",
+                                  backgroundColor: "#E3ECE4",
+                                  border: "1px solid #DFD6C7",
+                                  borderRadius: 6,
+                                  padding: "2px 8px",
+                                  fontSize: 12,
+                                  fontWeight: 700,
+                                  color: "#27402F",
+                                }}
+                              >
+                                {item.size.toLowerCase().startsWith("size") ? item.size : `Size ${item.size}`}
+                              </span>
+                              <span style={{ fontSize: 15, fontWeight: 700, color: "#3D5E46" }}>
+                                {item.price.toLocaleString()}đ
+                              </span>
+                            </div>
                           </div>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   )}
                 </div>
@@ -2875,8 +2902,7 @@ export default function PosOrderPage() {
                       setError(null);
                       setOrderType(specialModeHint ? "TEST" : "NORMAL");
                       setSpecialNote("");
-                      setServiceMode("IN_STORE");
-                      setOrderTypePickerOpen(false);
+                      setServiceMode(posConfig.defaultServiceMode || "table");
                     }}
                   >
                     Xoa gio
@@ -3368,6 +3394,64 @@ export default function PosOrderPage() {
                   </div>
                 ) : (
                   <>
+                    {/* Giảm giá nhanh (% Quick Discounts) trong màn hình Thanh toán */}
+                    <div style={{ marginTop: 14, border: "1px solid #DFD6C7", borderRadius: 12, padding: 12, backgroundColor: "#FAF7F2" }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                        <div style={{ fontWeight: 700, fontSize: 13, color: "#213224" }}>Giảm giá nhanh (% Chiết khấu)</div>
+                        {manualDiscountPercent > 0 && (
+                          <span style={{ fontSize: 12, fontWeight: 700, color: "#2E7D32" }}>
+                            Giảm {manualDiscountPercent}% (-{formatMoney(quickDiscountAmount)})
+                          </span>
+                        )}
+                      </div>
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setManualDiscountPercent(0);
+                            setPaymentChecked(false);
+                          }}
+                          style={{
+                            padding: "6px 12px",
+                            borderRadius: 8,
+                            border: manualDiscountPercent === 0 ? "1px solid #3D5E46" : "1px solid #DFD6C7",
+                            backgroundColor: manualDiscountPercent === 0 ? "#E3ECE4" : "#FFFFFF",
+                            color: manualDiscountPercent === 0 ? "#27402F" : "#555",
+                            fontSize: 12,
+                            fontWeight: manualDiscountPercent === 0 ? 700 : 500,
+                            cursor: "pointer",
+                          }}
+                        >
+                          0%
+                        </button>
+                        {(posConfig.quickDiscounts || [5, 10, 15, 20, 50, 100]).map((disc) => {
+                          const isSelected = manualDiscountPercent === disc;
+                          return (
+                            <button
+                              key={disc}
+                              type="button"
+                              onClick={() => {
+                                setManualDiscountPercent(isSelected ? 0 : disc);
+                                setPaymentChecked(false);
+                              }}
+                              style={{
+                                padding: "6px 12px",
+                                borderRadius: 8,
+                                border: isSelected ? "1px solid #3D5E46" : "1px solid #DFD6C7",
+                                backgroundColor: isSelected ? "#3D5E46" : "#FFFFFF",
+                                color: isSelected ? "#FFFFFF" : "#213224",
+                                fontSize: 12,
+                                fontWeight: isSelected ? 700 : 500,
+                                cursor: "pointer",
+                              }}
+                            >
+                              {disc === 100 ? "100% (Free)" : `${disc}%`}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+
                     <div style={{ marginTop: 14 }}>
                       <div style={{ fontWeight: 700, marginBottom: 8 }}>
                         Phuong thuc thanh toan
@@ -3738,74 +3822,185 @@ export default function PosOrderPage() {
                 <LoyaltyStatusHint hasMember={!!member} />
               </div>
 
-              <div style={railMetaGridStyle}>
-                <div style={{ border: "1px solid #ece7df", borderRadius: 12, padding: 12 }}>
-                  <div style={railSectionTitleStyle}>Loai don</div>
-                  <button
-                    type="button"
-                    onClick={() => setOrderTypePickerOpen(true)}
-                    disabled={mode === "payment" || editingLocked}
-                    style={{
-                      width: "100%",
-                      minHeight: 56,
-                      padding: "10px 12px",
-                      borderRadius: 12,
-                      border: "1px solid #ddd",
-                      background: isSpecialOrderType(orderType) ? "#fef3c7" : "#fff",
-                      color: "#111",
-                      fontWeight: 700,
-                    }}
-                  >
-                    {getOrderTypeLabel(orderType)}
-                    {specialNote.trim() ? " - Co ghi chu" : ""}
-                  </button>
-
-                  {isSpecialOrderType(orderType) ? (
-                    <div style={{ ...railHelpTextStyle, marginTop: 8, color: "#92400e" }}>
-                      Dang bat: {orderType}
-                      {specialNote ? ` - ${specialNote}` : ""}
-                    </div>
-                  ) : null}
+              {/* Session 2: Ưu đãi & Khuyến mãi (Voucher / Promotion) */}
+              <div style={{ border: "1px solid #DFD6C7", borderRadius: 12, padding: 12, backgroundColor: "#FAF7F2" }}>
+                <div style={{ ...railSectionTitleStyle, marginBottom: 8, display: "flex", alignItems: "center", gap: 6 }}>
+                  <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                    <Gift size={15} color="#3D5E46" /> Ưu đãi & Khuyến mãi
+                  </span>
                 </div>
 
-                <div style={{ border: "1px solid #ece7df", borderRadius: 12, padding: 12 }}>
-                  <div style={railSectionTitleStyle}>Chế độ nhận món & Định danh</div>
-                  
-                  {/* Selector các chế độ phục vụ */}
-                  <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 10 }}>
-                    {SERVICE_MODE_OPTIONS.filter((opt) => (posConfig.enabledServiceModes || []).includes(opt.id)).map((opt) => {
-                      const activeMode = serviceMode === opt.id;
-                      return (
-                        <button
-                          key={opt.id}
-                          type="button"
-                          onClick={() => {
-                            setServiceMode(opt.id);
-                            setPaymentChecked(false);
-                          }}
-                          disabled={mode === "payment" || !!gatewayOrderIdForVietqr}
-                          style={{
-                            padding: "6px 10px",
-                            borderRadius: 8,
-                            border: activeMode ? "1px solid #2D3E2F" : "1px solid #DFD9CE",
-                            backgroundColor: activeMode ? "#2D3E2F" : "#FFFFFF",
-                            color: activeMode ? "#FFFFFF" : "#1E2C20",
-                            fontSize: 12,
-                            fontWeight: activeMode ? 700 : 500,
-                            cursor: "pointer",
-                            display: "flex",
-                            alignItems: "center",
-                            gap: 4,
-                          }}
-                        >
-                          <span>{opt.icon}</span>
-                          <span>{opt.label}</span>
-                        </button>
-                      );
-                    })}
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 8, marginBottom: 8 }}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setOfferMode("voucher");
+                      setAppliedOfferCode("");
+                      setSelectedGiftItems([]);
+                      setGiftPickerOpen(false);
+                      setGiftPickerQtyMap({});
+                      setGiftPickerNotes({});
+                      setPricingPreview(null);
+                    }}
+                    disabled={mode === "payment" || pricingLoading || editingLocked}
+                    style={{
+                      padding: "8px 10px",
+                      borderRadius: 8,
+                      border: offerMode === "voucher" ? "1px solid #3D5E46" : "1px solid #DFD6C7",
+                      background: offerMode === "voucher" ? "#3D5E46" : "#FFFFFF",
+                      color: offerMode === "voucher" ? "#FFFFFF" : "#213224",
+                      fontWeight: 700,
+                      fontSize: 13,
+                      cursor: "pointer",
+                    }}
+                  >
+                    Voucher
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setOfferMode("promotion");
+                      setAppliedOfferCode("");
+                      setSelectedGiftItems([]);
+                      setGiftPickerOpen(false);
+                      setGiftPickerQtyMap({});
+                      setGiftPickerNotes({});
+                      openPromotionStep();
+                    }}
+                    disabled={mode === "payment" || pricingLoading || editingLocked}
+                    style={{
+                      padding: "8px 10px",
+                      borderRadius: 8,
+                      border: offerMode === "promotion" ? "1px solid #3D5E46" : "1px solid #DFD6C7",
+                      background: offerMode === "promotion" ? "#3D5E46" : "#FFFFFF",
+                      color: offerMode === "promotion" ? "#FFFFFF" : "#213224",
+                      fontWeight: 700,
+                      fontSize: 13,
+                      cursor: "pointer",
+                    }}
+                  >
+                    Khuyến mãi
+                  </button>
+                </div>
+
+                <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) 56px 56px", gap: 6 }}>
+                  <input
+                    value={offerCode}
+                    onChange={(e) => setOfferCode(e.target.value.trim())}
+                    placeholder={
+                      offerMode === "voucher"
+                        ? "Nhập mã voucher"
+                        : "Nhập mã khuyến mãi"
+                    }
+                    style={{
+                      width: "100%",
+                      padding: "8px 10px",
+                      borderRadius: 8,
+                      border: "1px solid #DFD6C7",
+                      backgroundColor: "#FFFFFF",
+                      fontSize: 13,
+                      boxSizing: "border-box",
+                    }}
+                    disabled={mode === "payment" || editingLocked}
+                  />
+                  <button
+                    type="button"
+                    onClick={applyOffer}
+                    disabled={mode === "payment" || pricingLoading || editingLocked || !offerCode.trim()}
+                    style={{
+                      borderRadius: 8,
+                      border: "1px solid #3D5E46",
+                      backgroundColor: "#3D5E46",
+                      color: "#fff",
+                      fontWeight: 700,
+                      fontSize: 12,
+                      cursor: "pointer",
+                    }}
+                  >
+                    Áp
+                  </button>
+                  <button
+                    type="button"
+                    onClick={clearOffer}
+                    disabled={mode === "payment" || pricingLoading || editingLocked}
+                    style={{
+                      borderRadius: 8,
+                      border: "1px solid #DFD6C7",
+                      backgroundColor: "#FFFFFF",
+                      color: "#555",
+                      fontSize: 12,
+                      cursor: "pointer",
+                    }}
+                  >
+                    Bỏ
+                  </button>
+                </div>
+
+                {appliedOfferCode ? (
+                  <div className="pos-alert pos-alert--success" style={{ marginTop: 8, padding: "8px 10px" }}>
+                    <div style={{ fontSize: 12 }}>
+                      <b>Đang áp {offerMode === "voucher" ? "voucher" : "khuyến mãi"}:</b> {appliedOfferCode}
+                    </div>
+                  </div>
+                ) : null}
+
+                {pricingPreview?.giftSelection ? (
+                  <div className="pos-alert pos-alert--warning" style={{ marginTop: 8, padding: "8px 10px" }}>
+                    <div style={{ fontSize: 12 }}>
+                      <b>Ưu đãi quà tặng:</b>{" "}
+                      {pricingPreview.giftSelection.required
+                        ? `Cần chọn ${pricingPreview.giftSelection.expectedQty} món tặng`
+                        : `Đã áp ${pricingPreview.giftSelection.expectedQty} món tặng`}
+                    </div>
+                    {pricingPreview.giftSelection.required ? (
+                      <button
+                        style={{ marginTop: 6, padding: "4px 8px", fontSize: 12 }}
+                        onClick={() => setGiftPickerOpen(true)}
+                        disabled={mode === "payment" || editingLocked}
+                      >
+                        Chọn món tặng
+                      </button>
+                    ) : null}
+                  </div>
+                ) : null}
+              </div>
+
+              <div style={railMetaGridStyle}>
+                <div style={{ border: "1px solid #DFD6C7", borderRadius: 12, padding: 12, backgroundColor: "#FAF7F2" }}>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
+                    <div style={{ ...railSectionTitleStyle, margin: 0, display: "flex", alignItems: "center", gap: 6 }}>
+                      {(() => {
+                        const ModeIcon = getServiceModeIcon(serviceMode);
+                        return <ModeIcon size={15} color="#3D5E46" />;
+                      })()}
+                      <span>{getServiceModeDisplayTitle(serviceMode)}</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => window.dispatchEvent(new CustomEvent("konekt_open_pos_settings"))}
+                      style={{
+                        background: "none",
+                        border: "1px solid #DFD6C7",
+                        color: "#3D5E46",
+                        fontSize: 12,
+                        fontWeight: 600,
+                        cursor: "pointer",
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 4,
+                        padding: "3px 8px",
+                        borderRadius: 6,
+                        backgroundColor: "#E3ECE4",
+                      }}
+                      title="Đổi mô hình bán hàng trong Cài Đặt POS"
+                    >
+                      <Sliders size={13} />
+                      <span>Cài đặt</span>
+                    </button>
                   </div>
 
-                  {/* Chi tiết theo từng chế độ */}
+                  {/* Chi tiết định danh theo duy nhất 1 mô hình đã được cấu hình */}
                   {serviceMode === "table" && (
                     <div>
                       <input
@@ -3817,13 +4012,14 @@ export default function PosOrderPage() {
                           width: "100%",
                           padding: "8px 12px",
                           borderRadius: 8,
-                          border: "1px solid #DFD9CE",
+                          border: "1px solid #DFD6C7",
+                          backgroundColor: "#FFFFFF",
                           fontSize: 13,
                           marginBottom: 8,
                           boxSizing: "border-box",
                         }}
                       />
-                      {/* Bàn nhanh */}
+                      {/* Bàn gợi ý nhanh */}
                       {posConfig.quickTables && posConfig.quickTables.length > 0 && (
                         <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
                           {posConfig.quickTables.map((t) => {
@@ -3832,20 +4028,22 @@ export default function PosOrderPage() {
                               <button
                                 key={t}
                                 type="button"
-                                onClick={() => setServiceIdentifier(t)}
+                                onClick={() => setServiceIdentifier(isTSelected ? "" : t)}
                                 disabled={mode === "payment" || editingLocked}
                                 style={{
-                                  padding: "4px 8px",
+                                  padding: "5px 10px",
                                   borderRadius: 6,
-                                  border: isTSelected ? "1px solid #2D3E2F" : "1px solid #DFD9CE",
-                                  backgroundColor: isTSelected ? "#EBF1EB" : "#FFFFFF",
-                                  color: isTSelected ? "#2D3E2F" : "#555",
-                                  fontSize: 11,
+                                  border: isTSelected ? "1px solid #3D5E46" : "1px solid #DFD6C7",
+                                  backgroundColor: isTSelected ? "#3D5E46" : "#FFFFFF",
+                                  color: isTSelected ? "#FFFFFF" : "#213224",
+                                  fontSize: 12,
                                   fontWeight: isTSelected ? 700 : 500,
                                   cursor: "pointer",
                                 }}
                               >
-                                {t}
+                                <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
+                                  <Armchair size={12} /> {t}
+                                </span>
                               </button>
                             );
                           })}
@@ -3855,37 +4053,73 @@ export default function PosOrderPage() {
                   )}
 
                   {serviceMode === "table_marker" && (
-                    <input
-                      value={serviceIdentifier}
-                      onChange={(e) => setServiceIdentifier(e.target.value)}
-                      placeholder="Nhập số thẻ để bàn (VD: 01, 12...)"
-                      disabled={mode === "payment" || editingLocked}
-                      style={{
-                        width: "100%",
-                        padding: "8px 12px",
-                        borderRadius: 8,
-                        border: "1px solid #DFD9CE",
-                        fontSize: 13,
-                        boxSizing: "border-box",
-                      }}
-                    />
+                    <div>
+                      <input
+                        value={serviceIdentifier}
+                        onChange={(e) => setServiceIdentifier(e.target.value)}
+                        placeholder="Nhập số thẻ để bàn / thẻ rung (VD: Thẻ 01, 12...)"
+                        disabled={mode === "payment" || editingLocked}
+                        style={{
+                          width: "100%",
+                          padding: "8px 12px",
+                          borderRadius: 8,
+                          border: "1px solid #DFD6C7",
+                          backgroundColor: "#FFFFFF",
+                          fontSize: 13,
+                          marginBottom: 8,
+                          boxSizing: "border-box",
+                        }}
+                      />
+                      {/* Thẻ gợi ý nhanh */}
+                      {(posConfig.quickMarkers || DEFAULT_SETTINGS.quickMarkers || []).length > 0 && (
+                        <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                          {(posConfig.quickMarkers || DEFAULT_SETTINGS.quickMarkers || []).map((m) => {
+                            const isMSelected = serviceIdentifier === m;
+                            return (
+                              <button
+                                key={m}
+                                type="button"
+                                onClick={() => setServiceIdentifier(isMSelected ? "" : m)}
+                                disabled={mode === "payment" || editingLocked}
+                                style={{
+                                  padding: "5px 10px",
+                                  borderRadius: 6,
+                                  border: isMSelected ? "1px solid #3D5E46" : "1px solid #DFD6C7",
+                                  backgroundColor: isMSelected ? "#3D5E46" : "#FFFFFF",
+                                  color: isMSelected ? "#FFFFFF" : "#213224",
+                                  fontSize: 12,
+                                  fontWeight: isMSelected ? 700 : 500,
+                                  cursor: "pointer",
+                                }}
+                              >
+                                <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
+                                  <Tag size={12} /> {m}
+                                </span>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
                   )}
 
                   {serviceMode === "queue_number" && (
-                    <input
-                      value={serviceIdentifier}
-                      onChange={(e) => setServiceIdentifier(e.target.value)}
-                      placeholder="Số thứ tự đơn (tự động in trên bill)"
-                      disabled={mode === "payment" || editingLocked}
+                    <div
                       style={{
-                        width: "100%",
-                        padding: "8px 12px",
+                        padding: "10px 14px",
+                        backgroundColor: "#E3ECE4",
                         borderRadius: 8,
-                        border: "1px solid #DFD9CE",
-                        fontSize: 13,
-                        boxSizing: "border-box",
+                        color: "#27402F",
+                        fontSize: 12,
+                        lineHeight: 1.5,
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 10,
                       }}
-                    />
+                    >
+                      <Hash size={20} color="#3D5E46" />
+                      <span>Hệ thống tự động in số thứ tự (STT) theo ngày trên bill để khách nhận đồ tại quầy.</span>
+                    </div>
                   )}
 
                   {serviceMode === "customer_name" && (
@@ -3898,7 +4132,8 @@ export default function PosOrderPage() {
                         style={{
                           padding: "8px 10px",
                           borderRadius: 8,
-                          border: "1px solid #DFD9CE",
+                          border: "1px solid #DFD6C7",
+                          backgroundColor: "#FFFFFF",
                           fontSize: 12,
                           boxSizing: "border-box",
                         }}
@@ -3911,7 +4146,8 @@ export default function PosOrderPage() {
                         style={{
                           padding: "8px 10px",
                           borderRadius: 8,
-                          border: "1px solid #DFD9CE",
+                          border: "1px solid #DFD6C7",
+                          backgroundColor: "#FFFFFF",
                           fontSize: 12,
                           boxSizing: "border-box",
                         }}
@@ -3920,8 +4156,21 @@ export default function PosOrderPage() {
                   )}
 
                   {serviceMode === "none" && (
-                    <div style={{ fontSize: 12, color: "#667064", fontStyle: "italic" }}>
-                      ⚡ Bán nhanh - Khách nhận đồ ngay tại quầy
+                    <div
+                      style={{
+                        padding: "10px 14px",
+                        backgroundColor: "#E3ECE4",
+                        borderRadius: 8,
+                        color: "#27402F",
+                        fontSize: 12,
+                        lineHeight: 1.5,
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 10,
+                      }}
+                    >
+                      <Zap size={20} color="#3D5E46" />
+                      <span>Chế độ bán nhanh - Khách nhận đồ ngay tại quầy, không cần định danh bàn/thẻ.</span>
                     </div>
                   )}
                 </div>
@@ -4044,209 +4293,57 @@ export default function PosOrderPage() {
                 })}
               </div>
 
-              {/* Giảm giá nhanh (% Quick Discounts) */}
-              <div style={{ border: "1px solid #ece7df", borderRadius: 12, padding: 12 }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
-                  <div style={railSectionTitleStyle}>Giảm giá nhanh (% Chiết khấu)</div>
-                  {manualDiscountPercent > 0 && (
-                    <span style={{ fontSize: 12, fontWeight: 700, color: "#2E7D32" }}>
-                      Giảm {manualDiscountPercent}% (-{formatMoney(quickDiscountAmount)})
-                    </span>
-                  )}
-                </div>
-                <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-                  <button
-                    type="button"
-                    onClick={() => setManualDiscountPercent(0)}
-                    disabled={mode === "payment" || editingLocked || isSpecialOrderType(orderType)}
-                    style={{
-                      padding: "5px 10px",
-                      borderRadius: 8,
-                      border: manualDiscountPercent === 0 ? "1px solid #2D3E2F" : "1px solid #DFD9CE",
-                      backgroundColor: manualDiscountPercent === 0 ? "#EBF1EB" : "#FFFFFF",
-                      color: manualDiscountPercent === 0 ? "#2D3E2F" : "#555",
-                      fontSize: 12,
-                      fontWeight: manualDiscountPercent === 0 ? 700 : 500,
-                      cursor: "pointer",
-                    }}
-                  >
-                    0%
-                  </button>
-                  {(posConfig.quickDiscounts || [5, 10, 15, 20, 50, 100]).map((disc) => {
-                    const isSelected = manualDiscountPercent === disc;
-                    return (
-                      <button
-                        key={disc}
-                        type="button"
-                        onClick={() => setManualDiscountPercent(isSelected ? 0 : disc)}
-                        disabled={mode === "payment" || editingLocked || isSpecialOrderType(orderType)}
-                        style={{
-                          padding: "5px 10px",
-                          borderRadius: 8,
-                          border: isSelected ? "1px solid #2D3E2F" : "1px solid #DFD9CE",
-                          backgroundColor: isSelected ? "#2D3E2F" : "#FFFFFF",
-                          color: isSelected ? "#FFFFFF" : "#1E2C20",
-                          fontSize: 12,
-                          fontWeight: isSelected ? 700 : 500,
-                          cursor: "pointer",
-                        }}
-                      >
-                        {disc === 100 ? "100% (Free)" : `${disc}%`}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-
-              <div style={{ border: "1px solid #ece7df", borderRadius: 12, padding: 12 }}>
-                <div style={railSectionTitleStyle}>Voucher / Promotion</div>
-                <div style={{ ...railHelpTextStyle, marginBottom: 8 }}>
-                  Nhap ma voucher hoac promotion cho don hien tai.
+              {/* Tổng giá trị đơn hàng (Cart Summary) */}
+              <div
+                style={{
+                  border: "1px solid #DFD6C7",
+                  borderRadius: 14,
+                  padding: "14px 16px",
+                  backgroundColor: "#FAF7F2",
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: 8,
+                }}
+              >
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 13, color: "#6b5b4d" }}>
+                  <span>Tạm tính</span>
+                  <span style={{ fontWeight: 600, color: "#213224" }}>{formatMoney(pricingPreview?.subtotalAmount ?? total)}</span>
                 </div>
 
-                {isSpecialOrderType(orderType) ? (
-                  <div className="pos-alert pos-alert--warning" style={{ marginBottom: 8 }}>
-                    Don dac biet khong duoc ap voucher/promotion.
+                {manualDiscountPercent > 0 && (
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 13, color: "#2E7D32" }}>
+                    <span>Chiết khấu ({manualDiscountPercent}%)</span>
+                    <span style={{ fontWeight: 600 }}>-{formatMoney(quickDiscountAmount)}</span>
                   </div>
-                ) : null}
+                )}
 
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 8, marginBottom: 8 }}>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setOfferMode("voucher");
-                      setAppliedOfferCode("");
-                      setSelectedGiftItems([]);
-                      setGiftPickerOpen(false);
-                      setGiftPickerQtyMap({});
-                      setGiftPickerNotes({});
-                      setPricingPreview(null);
-                    }}
-                    disabled={
-                      mode === "payment" ||
-                      pricingLoading ||
-                      editingLocked ||
-                      isSpecialOrderType(orderType)
-                    }
-                    style={{
-                      minHeight: 42,
-                      borderRadius: 10,
-                      border: "1px solid #ddd",
-                      background: offerMode === "voucher" ? "#111827" : "#fff",
-                      color: offerMode === "voucher" ? "#fff" : "#111",
-                      fontWeight: 700,
-                    }}
-                  >
-                    Voucher
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setOfferMode("promotion");
-                      setAppliedOfferCode("");
-                      setSelectedGiftItems([]);
-                      setGiftPickerOpen(false);
-                      setGiftPickerQtyMap({});
-                      setGiftPickerNotes({});
-                      openPromotionStep();
-                    }}
-                    disabled={
-                      mode === "payment" ||
-                      pricingLoading ||
-                      editingLocked ||
-                      isSpecialOrderType(orderType)
-                    }
-                    style={{
-                      minHeight: 42,
-                      borderRadius: 10,
-                      border: "1px solid #ddd",
-                      background: offerMode === "promotion" ? "#111827" : "#fff",
-                      color: offerMode === "promotion" ? "#fff" : "#111",
-                      fontWeight: 700,
-                    }}
-                  >
-                    Promotion
-                  </button>
-                </div>
-
-                <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) 58px 58px", gap: 8 }}>
-                  <input
-                    value={offerCode}
-                    onChange={(e) => setOfferCode(e.target.value.trim())}
-                    placeholder={
-                      offerMode === "voucher"
-                        ? "Nhap voucher code"
-                        : "Nhap promotion code"
-                    }
-                    style={memberInputStyle}
-                    disabled={
-                      mode === "payment" ||
-                      editingLocked ||
-                      isSpecialOrderType(orderType)
-                    }
-                  />
-                  <button
-                    onClick={applyOffer}
-                    disabled={
-                      mode === "payment" ||
-                      pricingLoading ||
-                      editingLocked ||
-                      isSpecialOrderType(orderType)
-                    }
-                  >
-                    Ap
-                  </button>
-                  <button
-                    onClick={clearOffer}
-                    disabled={
-                      mode === "payment" ||
-                      pricingLoading ||
-                      editingLocked ||
-                      isSpecialOrderType(orderType)
-                    }
-                  >
-                    Bo
-                  </button>
-                </div>
-
-                {appliedOfferCode ? (
-                  <div className="pos-alert pos-alert--success" style={{ marginTop: 8 }}>
-                    <div>
-                      <b>Dang ap {offerMode === "voucher" ? "voucher" : "promotion"}:</b>{" "}
-                      {appliedOfferCode}
-                    </div>
-                    <div style={{ fontSize: 12, marginTop: 4 }}>
-                      Neu da dung uu dai thi khong duoc chon combo.
-                    </div>
-                    {pricingPreview?.appliedVoucher?.benefitType === "GIFT" ? (
-                      <div style={{ fontSize: 12, marginTop: 4 }}>
-                        Voucher nay la qua tang, khong giam truc tiep vao tien.
-                      </div>
-                    ) : null}
+                {(pricingPreview?.voucherDiscountAmount || 0) > 0 && (
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 13, color: "#2E7D32" }}>
+                    <span>Voucher ({appliedOfferCode})</span>
+                    <span style={{ fontWeight: 600 }}>-{formatMoney(pricingPreview?.voucherDiscountAmount || 0)}</span>
                   </div>
-                ) : null}
+                )}
 
-                {pricingPreview?.giftSelection ? (
-                  <div className="pos-alert pos-alert--warning" style={{ marginTop: 8 }}>
-                    <div>
-                      <b>Uu dai qua tang:</b>{" "}
-                      {pricingPreview.giftSelection.required
-                        ? `Can chon ${pricingPreview.giftSelection.expectedQty} mon tang`
-                        : `Da ap ${pricingPreview.giftSelection.expectedQty} mon tang`}
-                    </div>
-
-                    {pricingPreview.giftSelection.required ? (
-                      <button
-                        style={{ marginTop: 8 }}
-                        onClick={() => setGiftPickerOpen(true)}
-                        disabled={mode === "payment" || editingLocked}
-                      >
-                        Chon mon tang
-                      </button>
-                    ) : null}
+                {(pricingPreview?.promotionDiscountAmount || 0) > 0 && (
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 13, color: "#2E7D32" }}>
+                    <span>Khuyến mãi ({appliedOfferCode})</span>
+                    <span style={{ fontWeight: 600 }}>-{formatMoney(pricingPreview?.promotionDiscountAmount || 0)}</span>
                   </div>
-                ) : null}
+                )}
+
+                <div
+                  style={{
+                    borderTop: "1px dashed #DFD6C7",
+                    paddingTop: 10,
+                    marginTop: 4,
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                  }}
+                >
+                  <span style={{ fontSize: 15, fontWeight: 700, color: "#213224" }}>Tổng thanh toán</span>
+                  <span style={{ fontSize: 20, fontWeight: 800, color: "#3D5E46" }}>{formatMoney(payableTotal)}</span>
+                </div>
               </div>
             </div>
           </div>
@@ -4397,98 +4494,6 @@ export default function PosOrderPage() {
         </div>
       ) : null}
 
-      {orderTypePickerOpen ? (
-        <div
-          className="pos-modal-backdrop"
-          onClick={() => setOrderTypePickerOpen(false)}
-        >
-          <div
-            className="pos-modal-card"
-            onClick={(e) => e.stopPropagation()}
-            style={{
-              width: "100%",
-              maxWidth: 520,
-              padding: 16,
-            }}
-          >
-            <div
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
-                gap: 12,
-                marginBottom: 12,
-              }}
-            >
-              <div>
-                <h3 style={{ margin: 0 }}>Chọn loại đơn</h3>
-                <div style={{ fontSize: 13, opacity: 0.75, marginTop: 4 }}>
-                  Đơn đặc biệt sẽ tách riêng trong báo cáo và không được áp
-                  voucher/promotion.
-                </div>
-              </div>
-
-              <button onClick={() => setOrderTypePickerOpen(false)}>Đóng</button>
-            </div>
-
-            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-              {(
-                ["NORMAL", "TEST", "FREE", "INTERNAL", "GUEST", "COMPENSATION"] as OrderType[]
-              ).map((type) => (
-                <button
-                  key={type}
-                  type="button"
-                  onClick={() => {
-                    setOrderType(type);
-                    if (type === "NORMAL") {
-                      setSpecialNote("");
-                    }
-                    resetOfferStateForOrderTypeChange();
-                  }}
-                  className={
-                    orderType === type
-                      ? "pos-select-card is-active"
-                      : "pos-select-card"
-                  }
-                  style={{ padding: "10px 14px" }}
-                >
-                  {type}
-                </button>
-              ))}
-            </div>
-
-            {isSpecialOrderType(orderType) ? (
-              <div style={{ marginTop: 12 }}>
-                <textarea
-                  value={specialNote}
-                  onChange={(e) => {
-                    setSpecialNote(e.target.value);
-                    setPaymentChecked(false);
-                  }}
-                  placeholder="Lý do / ghi chú đơn đặc biệt"
-                  rows={4}
-                  style={{ width: "100%" }}
-                />
-                <div style={{ fontSize: 12, opacity: 0.75, marginTop: 6 }}>
-                  Đơn đặc biệt vẫn trừ kho như order thường, nhưng sẽ được tách
-                  riêng để báo cáo.
-                </div>
-              </div>
-            ) : null}
-
-            <div
-              style={{
-                display: "flex",
-                justifyContent: "flex-end",
-                gap: 8,
-                marginTop: 16,
-              }}
-            >
-              <button onClick={() => setOrderTypePickerOpen(false)}>Xong</button>
-            </div>
-          </div>
-        </div>
-      ) : null}
 
       {/* Modal In Hóa Đơn Chuẩn K80/K58 */}
       <PosReceiptModal

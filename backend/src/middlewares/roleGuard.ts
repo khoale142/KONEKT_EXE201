@@ -20,9 +20,10 @@ import { Request, Response, NextFunction } from "express";
 const ROLE_LEVEL: Record<string, number> = {
   customer: 0,
   staff: 1,
-  store_manager: 2,
-  owner: 3,
-  platform_admin: 4,
+  shift_leader: 2,
+  store_manager: 3,
+  owner: 4,
+  platform_admin: 5,
 };
 
 function getRoleLevel(role: string): number {

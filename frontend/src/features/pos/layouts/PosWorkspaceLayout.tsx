@@ -49,6 +49,14 @@ export default function PosWorkspaceLayout() {
     return () => clearInterval(interval);
   }, [location.pathname]);
 
+  useEffect(() => {
+    const handleOpenSettings = () => setSettingsOpen(true);
+    window.addEventListener("konekt_open_pos_settings", handleOpenSettings);
+    return () => {
+      window.removeEventListener("konekt_open_pos_settings", handleOpenSettings);
+    };
+  }, []);
+
   const storeName = useMemo(() => {
     return user?.storeName || "KONEKT POS";
   }, [user]);
@@ -100,7 +108,7 @@ export default function PosWorkspaceLayout() {
         height: "100vh",
         width: "100vw",
         overflow: "hidden",
-        backgroundColor: "#FAF8F5",
+        backgroundColor: "#EFE9DF",
         fontFamily: '"Be Vietnam Pro", -apple-system, BlinkMacSystemFont, sans-serif',
       }}
     >
@@ -108,13 +116,13 @@ export default function PosWorkspaceLayout() {
       <header
         style={{
           height: "60px",
-          backgroundColor: "#1E2C20",
+          background: "linear-gradient(135deg, #44654D 0%, #344F3C 100%)",
           color: "#FFFFFF",
           display: "flex",
           alignItems: "center",
           justifyContent: "space-between",
           padding: "0 18px",
-          boxShadow: "0 2px 10px rgba(0, 0, 0, 0.2)",
+          boxShadow: "0 3px 12px rgba(45, 68, 50, 0.18)",
           zIndex: 50,
           flexShrink: 0,
         }}
