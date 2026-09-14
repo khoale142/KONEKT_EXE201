@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { authGuard } from "../../middlewares/authGuard";
 import { portalGuard } from "../../middlewares/portalGuard";
+import { requirePermission, requireStoreAccess } from '../../middlewares/canonicalAuthorizationGuard';
 import {
   posConfirmOnlineOrder,
   posCreateVoidRequest,
@@ -30,7 +31,10 @@ import {
 const router = Router();
 
 router.get("/pickup-board/:storeId", publicGetPickupBoard);
-router.use(authGuard, portalGuard(["POS"]));
+router.use(authGuard, portalGuard(["POS", "STORE", "OFFICE"]));
+// Canonical sessions are revalidated against their active membership and Store.
+// Legacy sessions continue through existing guards during the staged rollout.
+router.use(requirePermission('pos.access'), requireStoreAccess((req) => req.user?.storeId));
 
 // Cấu hình POS Store Settings
 router.get("/config", posGetStoreConfigHandler);
@@ -69,4 +73,3 @@ router.post("/:id/void-request", posCreateVoidRequest);
 router.post("/:id/refunds", posRefundOrder);
 
 export default router;
-

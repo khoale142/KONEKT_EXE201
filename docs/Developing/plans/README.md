@@ -23,3 +23,11 @@
 4. **Các bước thực thi chi tiết (Step-by-step)**.
 5. **Đánh giá rủi ro & Phương án dự phòng (Rollback plan)**.
 6. **Kế hoạch kiểm thử & nghiệm thu (Verification plan)**.
+
+## Kế hoạch bổ sung
+
+| Kế hoạch | Phạm vi | Trạng thái |
+|---|---|---|
+| [PLAN-15B](./PLAN-15B_OWNER_STORE_INVITES_AND_STAFF_ACTIVATION.md) | Nối kín mã mời Owner, gia nhập Store, phân role và cập nhật phiên Staff | Code/database đã triển khai; API đạt, chờ browser |
+| [PLAN-17](./PLAN-17_CANONICAL_ACCOUNT_MEMBERSHIP_FOUNDATION.md) | Phase 1: Account canonical, Tenant Membership và Store Access | Implemented — DB validation pending |
+| [PLAN-18](./PLAN-18_UNIFIED_AUTH_AND_WORKSPACE_CONTEXT.md) | Phase 2: Unified Authentication & Workspace Context | Implemented — live DB rollout pending |

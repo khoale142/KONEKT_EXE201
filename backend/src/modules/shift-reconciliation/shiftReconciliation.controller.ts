@@ -16,23 +16,39 @@ import {
   verifyShiftClose,
 } from "./shiftReconciliation.service";
 
-function getStoreIdFromReq(req: Request): number {
-  const u = req.user;
+/**
+ * Trích xuất an toàn tenantId và storeId từ JWT context hoặc request headers/params
+ */
+function getContextFromReq(req: Request): { tenantId: number; storeId: number } {
+  const u = (req as any).user;
   if (!u) throw new ApiError(401, "Unauthorized");
-  const isCrossPortal = (u.roles || []).some((r: string) => ["owner", "platform_admin"].includes(r));
-  if (u.portal !== "POS" && !isCrossPortal) throw new ApiError(403, "Forbidden (portal)");
-  const sid = u.storeId || (isCrossPortal && u.storeIds && u.storeIds[0]);
-  if (!sid) throw new ApiError(400, "POS missing storeId");
-  return Number(sid);
+
+  const tenantId = Number(u.tenantId);
+  if (!Number.isInteger(tenantId) || tenantId <= 0) {
+    throw new ApiError(403, "Tenant context is required");
+  }
+
+  const headerStore = req.headers["x-store-id"] ? Number(req.headers["x-store-id"]) : null;
+  const queryStore = req.query.storeId ? Number(req.query.storeId) : null;
+  const bodyStore = req.body && req.body.storeId ? Number(req.body.storeId) : null;
+
+  const storeId = headerStore || queryStore || bodyStore || u.storeId || (u.storeIds && u.storeIds[0]);
+  if (!Number.isInteger(Number(storeId)) || Number(storeId) <= 0) {
+    throw new ApiError(403, "Store context is required");
+  }
+
+  return { tenantId, storeId: Number(storeId) };
 }
 
 export const openPosShiftReconciliation = asyncHandler(
   async (req: Request, res: Response) => {
+    const { tenantId, storeId } = getContextFromReq(req);
     const body = openShiftReconciliationSchema.parse(req.body);
 
     const result = await openShiftReconciliation({
       reqUser: req.user,
-      storeId: getStoreIdFromReq(req),
+      tenantId,
+      storeId,
       workDate: body.workDate,
       shiftCode: body.shiftCode,
       openingCashAmount: body.openingCashAmount,
@@ -49,8 +65,10 @@ export const openPosShiftReconciliation = asyncHandler(
 
 export const getCurrentPosShiftReconciliation = asyncHandler(
   async (req: Request, res: Response) => {
+    const { tenantId, storeId } = getContextFromReq(req);
     const result = await getCurrentShiftReconciliation({
-      storeId: getStoreIdFromReq(req),
+      tenantId,
+      storeId,
     });
 
     res.json({
@@ -65,9 +83,12 @@ export const getPosShiftReconciliationDetail = asyncHandler(
     const id = Number(req.params.id);
     if (!id) throw new ApiError(400, "Invalid reconciliation id");
 
+    const { tenantId, storeId } = getContextFromReq(req);
+
     const result = await getShiftReconciliationDetail({
       id,
-      storeId: getStoreIdFromReq(req),
+      tenantId,
+      storeId,
     });
 
     res.json({
@@ -82,11 +103,13 @@ export const verifyPosShiftClose = asyncHandler(
     const id = Number(req.params.id);
     if (!id) throw new ApiError(400, "Invalid reconciliation id");
 
+    const { tenantId, storeId } = getContextFromReq(req);
     const body = verifyShiftCloseSchema.parse(req.body);
 
     const result = await verifyShiftClose({
       id,
-      storeId: getStoreIdFromReq(req),
+      tenantId,
+      storeId,
       actualCashAmount: body.actualCashAmount,
     });
 
@@ -102,12 +125,14 @@ export const closePosShiftReconciliation = asyncHandler(
     const id = Number(req.params.id);
     if (!id) throw new ApiError(400, "Invalid reconciliation id");
 
+    const { tenantId, storeId } = getContextFromReq(req);
     const body = closeShiftReconciliationSchema.parse(req.body);
 
     const result = await closeShiftReconciliation({
       reqUser: req.user,
       id,
-      storeId: getStoreIdFromReq(req),
+      tenantId,
+      storeId,
       actualCashAmount: body.actualCashAmount,
       confirmActualCashAmount: body.confirmActualCashAmount,
       confirmText: body.confirmText,
@@ -123,10 +148,12 @@ export const closePosShiftReconciliation = asyncHandler(
 
 export const listPosShiftReconciliations = asyncHandler(
   async (req: Request, res: Response) => {
+    const { tenantId, storeId } = getContextFromReq(req);
     const q = listShiftReconciliationsQuerySchema.parse(req.query);
 
     const result = await listShiftReconciliations({
-      storeId: getStoreIdFromReq(req),
+      tenantId,
+      storeId,
       dateFrom: q.dateFrom,
       dateTo: q.dateTo,
       status: q.status,

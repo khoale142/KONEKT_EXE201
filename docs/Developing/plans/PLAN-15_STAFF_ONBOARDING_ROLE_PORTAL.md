@@ -134,3 +134,7 @@
   - *Giải pháp*: Script migration chạy trực tiếp thông qua raw query ngoài transaction độc lập hoặc dùng khối lệnh an toàn `DO $$`.
 - **Bảo tồn tài khoản cũ**: Các tài khoản seed sẵn (`staff@cafe.dev`, `manager@cafe.dev`, `owner@cafe.dev`) tiếp tục hoạt động bình thường 100%.
 - **Quy tắc Icon**: Kiểm soát 100% icon bằng `lucide-react`, không dùng emoji unicode.
+
+
+## Nghiệm thu lại ngày 12/09/2026
+Giữ lịch sử PLAN-15; phần mời Owner, liên kết đúng userId, scope và activation được hoàn thiện tại [PLAN-15B](PLAN-15B_OWNER_STORE_INVITES_AND_STAFF_ACTIVATION.md). [Biên bản API/database/build và phần UI còn chờ](../logs/VERIFY-15B_STAFF_ONBOARDING.md).

@@ -1,3 +1,5 @@
+import { issueKonektSession, resolveKonektSession } from './konektSession.service';
+import { issueCanonicalAccountSession, issueCanonicalWorkspaceSession, resolveCanonicalAccountSession, resolveCanonicalWorkspaceSession } from './canonicalWorkspaceSession.service';
 import { Request, Response } from "express";
 import { asyncHandler } from "../../utils/asyncHandler";
 import { ApiError } from "../../utils/apiError";
@@ -153,6 +155,23 @@ export const refresh = asyncHandler(async (req: Request, res: Response) => {
   if (!token) throw new ApiError(400, "Missing refreshToken");
 
   const claims = verifyRefreshToken(token);
+  if (claims.authSource === 'konekt' && claims.authMode === 'canonical' && claims.accountId && claims.membershipId) {
+    res.json(await issueCanonicalWorkspaceSession(claims.accountId, {
+      membershipId: claims.membershipId,
+      tenantId: claims.tenantId,
+      storeId: claims.storeId,
+    }));
+    return;
+  }
+  if (claims.authSource === 'konekt' && claims.authMode === 'canonical' && claims.scope === 'account' && claims.accountId) {
+    res.json(await issueCanonicalAccountSession(claims.accountId));
+    return;
+  }
+  if (claims.authSource === 'konekt') {
+    res.json(await issueKonektSession(Number(claims.sub), claims.scope === 'onboarding' ? undefined : claims.storeId, claims.membershipIds));
+    return;
+  }
+  if (claims.portal !== 'CUSTOMER' && claims.roles?.some(r => ['owner', 'platform_admin', 'staff', 'shift_leader', 'store_manager'].includes(r))) throw new ApiError(401, 'Vui lòng đăng nhập lại');
   const newAccess = signAccessToken(claims);
   const newRefresh = signRefreshToken(claims);
 
@@ -160,7 +179,27 @@ export const refresh = asyncHandler(async (req: Request, res: Response) => {
 });
 
 export const me = asyncHandler(async (req: Request, res: Response) => {
-  res.json({ user: (req as any).user });
+  const claims = req.user!;
+  if (claims.authSource === 'konekt' && claims.authMode === 'canonical' && claims.accountId && claims.membershipId) {
+    const session = await resolveCanonicalWorkspaceSession(claims.accountId, {
+      membershipId: claims.membershipId,
+      tenantId: claims.tenantId,
+      storeId: claims.storeId,
+    });
+    res.json({ user: session.user });
+    return;
+  }
+  if (claims.authSource === 'konekt' && claims.authMode === 'canonical' && claims.scope === 'account' && claims.accountId) {
+    res.json({ user: (await resolveCanonicalAccountSession(claims.accountId)).user });
+    return;
+  }
+  if (claims.authSource === 'konekt') {
+    const session = await resolveKonektSession(Number(claims.sub), claims.scope === 'onboarding' ? undefined : claims.storeId, claims.membershipIds);
+    // An old onboarding access token cannot silently acquire workspace scope.
+    res.json({ user: claims.scope === 'onboarding' ? { ...session.user, scope: 'onboarding', requireStoreJoin: true, tenantId: undefined, storeId: undefined, storeIds: [], stores: [] } : session.user });
+    return;
+  }
+  res.json({ user: claims });
 });
 
 export const customerSendOtp = asyncHandler(
@@ -254,6 +293,7 @@ export const officeResetPassword = asyncHandler(
 // ── KONEKT Multi-Tenant Endpoints ──
 import {
   registerOwner,
+  registerCanonicalAccount,
   registerStaff,
   loginKonekt as loginKonektService,
   demoLogin as demoLoginService,
@@ -297,6 +337,11 @@ export const loginKonektHandler = asyncHandler(
     res.json(result);
   }
 );
+
+export const registerCanonicalAccountHandler = asyncHandler(async (req: Request, res: Response) => {
+  const { fullName, email, password, phone } = req.body;
+  res.status(201).json(await registerCanonicalAccount({ fullName, email, password, phone }));
+});
 
 export const demoLoginHandler = asyncHandler(
   async (req: Request, res: Response) => {

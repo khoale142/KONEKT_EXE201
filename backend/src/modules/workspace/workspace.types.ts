@@ -21,7 +21,7 @@ export const PERMISSION_DEFINITIONS: PermissionDefinition[] = [
     key: "can_invite_staff",
     label: "Mời & duyệt nhân sự vào Store",
     description: "Xem mã mời Store, chia sẻ mã và duyệt yêu cầu kích hoạt nhân viên mới",
-    defaultManager: true,
+    defaultManager: false,
     defaultLeader: false,
     defaultStaff: false,
   },

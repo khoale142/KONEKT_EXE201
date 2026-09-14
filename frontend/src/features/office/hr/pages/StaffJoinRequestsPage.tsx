@@ -1,3 +1,5 @@
+import { useAuthStore } from '../../../../app/store/auth.store';
+import { notifyStaffChanged } from '../../../workspace/api/workspace.api';
 import { useState, useEffect } from "react";
 import {
   UserPlus,
@@ -12,21 +14,24 @@ import {
 import {
   workspaceApi,
   StoreJoinRequestItem,
-  PermissionDefinition,
+
 } from "../../../workspace/api/workspace.api";
 
 export default function StaffJoinRequestsPage() {
+  const tenantId = useAuthStore(s => s.user?.tenantId);
 
+  const [page, setPage] = useState(1);
+  const [storeFilter, setStoreFilter] = useState("");
   const [loading, setLoading] = useState(true);
   const [requests, setRequests] = useState<StoreJoinRequestItem[]>([]);
-  const [permissionDefs, setPermissionDefs] = useState<PermissionDefinition[]>([]);
+
   const [error, setError] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
   // Modal Approve & Granular Permissions
   const [approvingReq, setApprovingReq] = useState<StoreJoinRequestItem | null>(null);
   const [selectedRole, setSelectedRole] = useState<"store_manager" | "shift_leader" | "staff">("staff");
-  const [activePermissions, setActivePermissions] = useState<string[]>([]);
+
   const [approving, setApproving] = useState(false);
 
   // Modal Reject
@@ -38,12 +43,7 @@ export default function StaffJoinRequestsPage() {
     try {
       setLoading(true);
       setError(null);
-      const [reqList, defs] = await Promise.all([
-        workspaceApi.getStaffRequests(),
-        workspaceApi.getPermissions(),
-      ]);
-      setRequests(reqList);
-      setPermissionDefs(defs);
+      setRequests(await workspaceApi.getStaffRequests());
     } catch (err: any) {
       setError(err?.response?.data?.message || "Không thể tải danh sách yêu cầu nhân sự");
     } finally {
@@ -53,49 +53,13 @@ export default function StaffJoinRequestsPage() {
 
   useEffect(() => {
     void loadData();
-  }, []);
+  }, [tenantId]);
 
   const openApproveModal = (req: StoreJoinRequestItem) => {
     setApprovingReq(req);
-    const pos = req.desiredPosition?.toLowerCase() || "";
-    let initRole: "store_manager" | "shift_leader" | "staff" = "staff";
-
-    if (pos.includes("quản lý") || pos.includes("manager")) {
-      initRole = "store_manager";
-    } else if (pos.includes("trưởng ca") || pos.includes("leader")) {
-      initRole = "shift_leader";
-    }
-
-    setSelectedRole(initRole);
-
-    // Bật các quyền mặc định theo role
-    const defaultPerms = permissionDefs
-      .filter((p) => {
-        if (initRole === "store_manager") return p.defaultManager;
-        if (initRole === "shift_leader") return p.defaultLeader ?? p.defaultStaff;
-        return p.defaultStaff;
-      })
-      .map((p) => p.key);
-    setActivePermissions(defaultPerms);
+    setSelectedRole('staff');
   };
-
-  const handleRoleChange = (role: "store_manager" | "shift_leader" | "staff") => {
-    setSelectedRole(role);
-    const defaultPerms = permissionDefs
-      .filter((p) => {
-        if (role === "store_manager") return p.defaultManager;
-        if (role === "shift_leader") return p.defaultLeader ?? p.defaultStaff;
-        return p.defaultStaff;
-      })
-      .map((p) => p.key);
-    setActivePermissions(defaultPerms);
-  };
-
-  const togglePermission = (key: string) => {
-    setActivePermissions((prev) =>
-      prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key]
-    );
-  };
+  const handleRoleChange = (role: "store_manager" | "shift_leader" | "staff") => setSelectedRole(role);
 
   const handleConfirmApprove = async () => {
     if (!approvingReq) return;
@@ -104,11 +68,12 @@ export default function StaffJoinRequestsPage() {
       await workspaceApi.approveStaffRequest(approvingReq.id, {
         role: selectedRole,
         storeId: approvingReq.storeId,
-        customPermissions: activePermissions,
+
       });
 
       setSuccessMsg(`Đã phê duyệt và phân quyền cho ${approvingReq.fullName} thành công.`);
       setApprovingReq(null);
+      notifyStaffChanged(tenantId);
       void loadData();
       setTimeout(() => setSuccessMsg(null), 3000);
     } catch (err: any) {
@@ -127,6 +92,7 @@ export default function StaffJoinRequestsPage() {
       setSuccessMsg(`Đã từ chối yêu cầu của ${rejectingReq.fullName}.`);
       setRejectingReq(null);
       setRejectReason("");
+      notifyStaffChanged(tenantId);
       void loadData();
       setTimeout(() => setSuccessMsg(null), 3000);
     } catch (err: any) {
@@ -142,13 +108,26 @@ export default function StaffJoinRequestsPage() {
 
   const [statusFilter, setStatusFilter] = useState<"all" | "pending" | "approved" | "rejected">("all");
 
-  const displayedRequests = requests.filter((r) => {
+  useEffect(() => setPage(1), [statusFilter, storeFilter, tenantId]);
+  const filteredRequests = requests.filter((r) => {
+    if (storeFilter && r.storeId !== Number(storeFilter)) return false;
     if (statusFilter === "all") return true;
     return r.status === statusFilter;
   });
 
+  const displayedRequests = filteredRequests.slice((page - 1) * 20, page * 20);
+
   return (
     <div style={{ maxWidth: 1120, margin: "0 auto", padding: "16px 0 32px" }}>
+      <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap', marginBottom: 20 }}>
+        <label>Chi nhánh <select aria-label="Lọc yêu cầu theo chi nhánh" value={storeFilter} onChange={e => setStoreFilter(e.target.value)}>
+          <option value="">Tất cả chi nhánh</option>
+          {[...new Map(requests.map(r => [r.storeId, r.storeName])).entries()].map(([id, name]) => <option key={id} value={id}>{name}</option>)}
+        </select></label>
+        <button disabled={page <= 1} onClick={() => setPage(p => p - 1)}>Trước</button>
+        <span>Trang {page} · {filteredRequests.length} yêu cầu</span>
+        <button disabled={page * 20 >= filteredRequests.length} onClick={() => setPage(p => p + 1)}>Sau</button>
+      </div>
       {/* Header */}
       <div style={{ marginBottom: 20, display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 14 }}>
         <div>
@@ -168,7 +147,7 @@ export default function StaffJoinRequestsPage() {
               <UserPlus size={20} />
             </div>
             <h1 style={{ fontSize: "1.5rem", fontWeight: 800, color: "#2C3B2B", margin: 0 }}>
-              Duyệt Nhân Sự & Phân Quyền Tính Năng
+              Duyệt Nhân Sự & Phân Vai Trò
             </h1>
             {pendingCount > 0 && (
               <span
@@ -188,7 +167,7 @@ export default function StaffJoinRequestsPage() {
           </div>
           <p style={{ color: "#687668", fontSize: "0.88rem", margin: 0 }}>
             Danh sách nhân sự / đối tác nhập mã mời của từng chi nhánh để xin vào làm việc. Chủ quán có
-            thể phê duyệt, chọn vai trò và tùy biến bật/tắt từng tính năng chi tiết cho từng người.
+            thể phê duyệt và chọn vai trò làm việc cho từng người.
           </p>
         </div>
 
@@ -540,7 +519,7 @@ export default function StaffJoinRequestsPage() {
             <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
               <Sliders size={20} color="#2B402D" />
               <h2 style={{ fontSize: "1.25rem", fontWeight: 800, margin: 0, color: "#2A3B2C" }}>
-                Duyệt & Phân Quyền Tính Năng
+                Duyệt & Phân Vai Trò
               </h2>
             </div>
             <p style={{ color: "#687668", fontSize: "0.85rem", margin: "0 0 18px 0" }}>
@@ -616,63 +595,7 @@ export default function StaffJoinRequestsPage() {
               </div>
             </div>
 
-            {/* 2. Bảng Tùy Biến Bật / Tắt Quyền Hạn Chi Tiết */}
-            <div style={{ marginBottom: 20 }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-                <label style={{ fontSize: "0.82rem", fontWeight: 700, color: "#2A3B2C" }}>
-                  2. Tùy biến tính năng (Owner Permission Overrides)
-                </label>
-                <span style={{ fontSize: "0.75rem", color: "#687668" }}>
-                  Bật/tắt các quyền cụ thể bên dưới:
-                </span>
-              </div>
-
-              <div
-                style={{
-                  background: "#FFFFFF",
-                  border: "1px solid #E8E0D5",
-                  borderRadius: 10,
-                  padding: "8px 14px",
-                  display: "flex",
-                  flexDirection: "column",
-                  gap: 10,
-                }}
-              >
-                {permissionDefs.map((p) => {
-                  const isChecked = activePermissions.includes(p.key);
-
-                  return (
-                    <label
-                      key={p.key}
-                      style={{
-                        display: "flex",
-                        alignItems: "flex-start",
-                        gap: 10,
-                        padding: "8px 4px",
-                        cursor: "pointer",
-                        borderBottom: "1px solid #FAF6F3",
-                      }}
-                    >
-                      <input
-                        type="checkbox"
-                        checked={isChecked}
-                        onChange={() => togglePermission(p.key)}
-                        style={{ marginTop: 3, accentColor: "#2B402D", width: 16, height: 16 }}
-                      />
-                      <div style={{ flex: 1 }}>
-                        <div style={{ fontWeight: 700, fontSize: "0.86rem", color: isChecked ? "#2A3B2C" : "#8C9B8E" }}>
-                          {p.label}
-                        </div>
-                        <div style={{ fontSize: "0.75rem", color: "#687668" }}>
-                          {p.description}
-                        </div>
-                      </div>
-                    </label>
-                  );
-                })}
-              </div>
-            </div>
-
+            <p style={{ fontSize: 13, color: '#556B5A' }}>Vai trò do Chủ quán quyết định. Vị trí ứng tuyển chỉ là nguyện vọng; chỉ Chủ quán được mời và duyệt nhân sự.</p>
             {/* Actions */}
             <div style={{ display: "flex", justifyContent: "flex-end", gap: 10 }}>
               <button

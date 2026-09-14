@@ -1,15 +1,26 @@
 import { ApiError } from "../../utils/apiError";
+import { pool } from "../../config/db";
 import * as repo from "./shiftReconciliation.repo";
 import { safeWritePosActionLog } from "../pos-action-log/posActionLog.service";
+import { resolveCanonicalAuthorization } from "../auth/canonicalAuthorization.service";
 
 type ShiftCode = "A" | "B";
 
 function normalizeDate(input?: string | null) {
   const v = String(input || "").trim();
   if (!/^\d{4}-\d{2}-\d{2}$/.test(v)) {
-    throw new ApiError(400, "Ngay khong hop le, dinh dang dung la YYYY-MM-DD");
+    throw new ApiError(400, "Ngày không hợp lệ, định dạng đúng là YYYY-MM-DD");
   }
   return v;
+}
+
+function normalizeConfirmText(str: string): string {
+  return str
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[đĐ]/g, "d")
+    .trim()
+    .toUpperCase();
 }
 
 function getActorUserId(reqUser: any): number | null {
@@ -21,17 +32,26 @@ function getActorUserId(reqUser: any): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
+async function resolveActorMembershipId(reqUser: any, tenantId: number): Promise<number | null> {
+  if (reqUser?.authMode !== "canonical") return null;
+  const authorization = await resolveCanonicalAuthorization(reqUser);
+  if (authorization.tenantId !== tenantId) {
+    throw new ApiError(403, "Tenant trong phiên canonical không khớp với ca làm việc");
+  }
+  return authorization.membershipId;
+}
+
 function getShiftSchedule(workDate: string, shiftCode: ShiftCode) {
   if (shiftCode === "A") {
     return {
-      scheduledStartAt: `${workDate} 07:00:00`,
-      scheduledEndAt: `${workDate} 15:00:00`,
+      scheduledStartAt: `${workDate} 07:00:00+07`,
+      scheduledEndAt: `${workDate} 15:00:00+07`,
     };
   }
 
   return {
-    scheduledStartAt: `${workDate} 15:00:00`,
-    scheduledEndAt: `${workDate} 23:00:00`,
+    scheduledStartAt: `${workDate} 15:00:00+07`,
+    scheduledEndAt: `${workDate} 23:00:00+07`,
   };
 }
 
@@ -46,11 +66,11 @@ function buildShiftWarning(row: any) {
   if (now.getTime() <= end.getTime()) return null;
 
   const diffMinutes = Math.floor((now.getTime() - end.getTime()) / 60000);
-  const shiftCode = String(row.shift_code || "");
+  const shiftCode = String(row.shift_code || "A");
 
   return {
     code: "SHIFT_OVERDUE",
-    message: `Ca ${shiftCode} da het gio, vui long chot ca va mo ca tiep theo khi phu hop`,
+    message: `Ca ${shiftCode} đã hết giờ làm tiêu chuẩn. Vui lòng kiểm két và chốt ca.`,
     overdueMinutes: diffMinutes,
     scheduledEndAt: row.scheduled_end_at,
   };
@@ -59,10 +79,11 @@ function buildShiftWarning(row: any) {
 function mapReconciliationRow(row: any) {
   return {
     id: Number(row.id),
+    tenantId: Number(row.tenant_id),
     storeId: Number(row.store_id),
     shiftSessionId: row.shift_session_id != null ? Number(row.shift_session_id) : null,
     workDate: String(row.work_date),
-    shiftCode: String(row.shift_code) as ShiftCode,
+    shiftCode: (String(row.shift_code || "A").toUpperCase() === "B" ? "B" : "A") as ShiftCode,
     scheduledStartAt: row.scheduled_start_at,
     scheduledEndAt: row.scheduled_end_at,
     openingCashAmount: Number(row.opening_cash_amount || 0),
@@ -78,6 +99,7 @@ function mapReconciliationRow(row: any) {
     startedAt: row.started_at,
     closedAt: row.closed_at ?? null,
     openedBy: row.opened_by != null ? Number(row.opened_by) : null,
+    openedMembershipId: row.opened_membership_id != null ? Number(row.opened_membership_id) : null,
     closedBy: row.closed_by != null ? Number(row.closed_by) : null,
     status: String(row.status),
     note: row.note ?? null,
@@ -132,25 +154,29 @@ function mapSummaryRow(row: any) {
 
 async function buildDetail(params: {
   reconciliationRow: any;
+  tenantId: number;
   storeId?: number;
 }) {
-  const store = await repo.getStoreMeta(Number(params.reconciliationRow.store_id));
+  const store = await repo.getStoreMeta(params.tenantId, Number(params.reconciliationRow.store_id));
   if (!store) {
-    throw new ApiError(404, "Store not found");
+    throw new ApiError(404, "Cửa hàng không tồn tại hoặc không thuộc thương hiệu này");
   }
 
   const summaryRow = await repo.getReconciliationSummary({
     reconciliationId: Number(params.reconciliationRow.id),
+    tenantId: params.tenantId,
     storeId: params.storeId,
   });
 
   const payments = await repo.getReconciliationPayments({
     reconciliationId: Number(params.reconciliationRow.id),
+    tenantId: params.tenantId,
     storeId: params.storeId,
   });
 
   const specialOrders = await repo.getReconciliationSpecialOrders({
     reconciliationId: Number(params.reconciliationRow.id),
+    tenantId: params.tenantId,
     storeId: params.storeId,
   });
 
@@ -192,8 +218,12 @@ async function buildDetail(params: {
   };
 }
 
+/**
+ * 1. Mở ca bán hàng mới (Strictly Multi-Tenant)
+ */
 export async function openShiftReconciliation(params: {
   reqUser: any;
+  tenantId: number;
   storeId: number;
   workDate: string;
   shiftCode: ShiftCode;
@@ -205,47 +235,39 @@ export async function openShiftReconciliation(params: {
   const openingCashAmount = Number(params.openingCashAmount || 0);
 
   if (!Number.isFinite(openingCashAmount) || openingCashAmount < 0) {
-    throw new ApiError(400, "openingCashAmount khong hop le");
+    throw new ApiError(400, "Số tiền đầu ca (openingCashAmount) không hợp lệ");
   }
 
-  const currentOpen = await repo.findOpenReconciliationByStore(params.storeId);
+  // Kiểm tra xem store của tenant này đã có ca mở chưa
+  const currentOpen = await repo.findOpenReconciliationByStore(params.tenantId, params.storeId);
 
   if (currentOpen) {
     throw new ApiError(
       400,
-      `Store dang co 1 phien chot ca mo (ca ${currentOpen.shift_code}), hay dong phien do truoc`
+      `Chi nhánh đang có một ca đang mở (Ca ${currentOpen.shift_code}). Vui lòng chốt ca đó trước khi mở ca mới.`
     );
   }
 
   const schedule = getShiftSchedule(workDate, params.shiftCode);
-
-  let shiftSessionId: number | null = params.shiftSessionId ?? null;
-
-  if (!shiftSessionId) {
-    const inventorySession = await repo.findOpenInventoryShiftSession({
-      storeId: params.storeId,
-      workDate,
-    });
-
-    if (inventorySession) {
-      shiftSessionId = Number(inventorySession.id);
-    }
-  }
+  const membershipId = await resolveActorMembershipId(params.reqUser, params.tenantId);
 
   const created = await repo.createReconciliation({
+    tenantId: params.tenantId,
     storeId: params.storeId,
-    shiftSessionId,
+    shiftSessionId: params.shiftSessionId ?? null,
     workDate,
     shiftCode: params.shiftCode,
     scheduledStartAt: schedule.scheduledStartAt,
     scheduledEndAt: schedule.scheduledEndAt,
     openingCashAmount,
     openedBy: getActorUserId(params.reqUser),
+    membershipId,
     note: params.note?.trim() || null,
   });
 
   const detail = await buildDetail({
     reconciliationRow: created,
+    tenantId: params.tenantId,
     storeId: params.storeId,
   });
 
@@ -256,14 +278,12 @@ export async function openShiftReconciliation(params: {
     actionType: "SHIFT_OPEN",
     entityType: "SHIFT_RECONCILIATION",
     entityId: Number(created.id),
-    note: `Mo ca ${params.shiftCode}`,
+    note: `Mở ca ${params.shiftCode} - Tiền két: ${openingCashAmount}`,
     afterData: {
       reconciliationId: Number(created.id),
       workDate,
       shiftCode: params.shiftCode,
       openingCashAmount,
-      shiftSessionId: shiftSessionId ?? null,
-      note: params.note?.trim() || null,
       status: "open",
     },
   });
@@ -271,66 +291,80 @@ export async function openShiftReconciliation(params: {
   return detail;
 }
 
+/**
+ * 2. Lấy ca đang mở hiện tại của Store (KHÔNG tự động mở ca ngầm!)
+ */
 export async function getCurrentShiftReconciliation(params: {
+  tenantId: number;
   storeId: number;
 }) {
-  let current = await repo.findOpenReconciliationByStore(params.storeId);
-  if (!current) {
-    current = await repo.autoOpenDefaultShiftSession(params.storeId);
-  }
+  const current = await repo.findOpenReconciliationByStore(params.tenantId, params.storeId);
   if (!current) return null;
 
   return buildDetail({
     reconciliationRow: current,
+    tenantId: params.tenantId,
     storeId: params.storeId,
   });
 }
 
+/**
+ * 3. Xem chi tiết ca theo ID
+ */
 export async function getShiftReconciliationDetail(params: {
   id: number;
-  storeId: number;
+  tenantId: number;
+  storeId?: number;
 }) {
   const row = await repo.getReconciliationById({
     id: params.id,
+    tenantId: params.tenantId,
     storeId: params.storeId,
   });
 
   if (!row) {
-    throw new ApiError(404, "Khong tim thay phien chot ca");
+    throw new ApiError(404, "Không tìm thấy phiên ca làm việc");
   }
 
   return buildDetail({
     reconciliationRow: row,
+    tenantId: params.tenantId,
     storeId: params.storeId,
   });
 }
 
+/**
+ * 4. Xác thực đóng ca bước 1 (Tính trước chênh lệch thừa/thiếu tiền két)
+ */
 export async function verifyShiftClose(params: {
   id: number;
-  storeId: number;
+  tenantId: number;
+  storeId?: number;
   actualCashAmount: number;
 }) {
   const actualCashAmount = Number(params.actualCashAmount);
 
   if (!Number.isFinite(actualCashAmount) || actualCashAmount < 0) {
-    throw new ApiError(400, "actualCashAmount khong hop le");
+    throw new ApiError(400, "Số tiền kiểm đếm thực tế không hợp lệ");
   }
 
   const row = await repo.getReconciliationById({
     id: params.id,
+    tenantId: params.tenantId,
     storeId: params.storeId,
   });
 
   if (!row) {
-    throw new ApiError(404, "Khong tim thay phien chot ca");
+    throw new ApiError(404, "Không tìm thấy phiên ca làm việc");
   }
 
   if (String(row.status) !== "open") {
-    throw new ApiError(400, "Phien chot ca nay da dong");
+    throw new ApiError(400, "Phiên ca này đã được đóng trước đó");
   }
 
   const summaryRow = await repo.getReconciliationSummary({
     reconciliationId: params.id,
+    tenantId: params.tenantId,
     storeId: params.storeId,
   });
 
@@ -345,14 +379,18 @@ export async function verifyShiftClose(params: {
       expectedCashInDrawer: summary.expectedCashInDrawer,
       variancePreview,
       requiresSecondStep: true,
-      confirmText: "XAC NHAN DONG CA",
+      confirmText: "XÁC NHẬN ĐÓNG CA",
     },
   };
 }
 
+/**
+ * 5. Xác nhận đóng ca bước 2 (Chốt số liệu két và lưu biên bản)
+ */
 export async function closeShiftReconciliation(params: {
   reqUser: any;
   id: number;
+  tenantId: number;
   storeId: number;
   actualCashAmount: number;
   confirmActualCashAmount: number;
@@ -363,36 +401,39 @@ export async function closeShiftReconciliation(params: {
   const confirmActualCashAmount = Number(params.confirmActualCashAmount);
 
   if (!Number.isFinite(actualCashAmount) || actualCashAmount < 0) {
-    throw new ApiError(400, "actualCashAmount khong hop le");
+    throw new ApiError(400, "Số tiền thực đếm không hợp lệ");
   }
 
   if (!Number.isFinite(confirmActualCashAmount) || confirmActualCashAmount < 0) {
-    throw new ApiError(400, "confirmActualCashAmount khong hop le");
+    throw new ApiError(400, "Số tiền xác nhận lần 2 không hợp lệ");
   }
 
   if (actualCashAmount !== confirmActualCashAmount) {
-    throw new ApiError(400, "So tien xac nhan lan 2 khong khop");
+    throw new ApiError(400, "Số tiền xác nhận lần 2 không khớp với số tiền đã nhập");
   }
 
-  if (String(params.confirmText || "").trim().toUpperCase() !== "XAC NHAN DONG CA") {
-    throw new ApiError(400, "Noi dung xac nhan khong dung");
+  const norm = normalizeConfirmText(params.confirmText || "");
+  if (norm !== "XAC NHAN DONG CA" && norm !== "DONG CA") {
+    throw new ApiError(400, "Nội dung xác nhận không đúng. Vui lòng nhập: XÁC NHẬN ĐÓNG CA");
   }
 
   const row = await repo.getReconciliationById({
     id: params.id,
+    tenantId: params.tenantId,
     storeId: params.storeId,
   });
 
   if (!row) {
-    throw new ApiError(404, "Khong tim thay phien chot ca");
+    throw new ApiError(404, "Không tìm thấy phiên ca làm việc");
   }
 
   if (String(row.status) !== "open") {
-    throw new ApiError(400, "Phien chot ca nay da dong");
+    throw new ApiError(400, "Phiên ca này đã được đóng");
   }
 
   const summaryRow = await repo.getReconciliationSummary({
     reconciliationId: params.id,
+    tenantId: params.tenantId,
     storeId: params.storeId,
   });
 
@@ -405,6 +446,8 @@ export async function closeShiftReconciliation(params: {
 
   const closed = await repo.closeReconciliation({
     id: params.id,
+    tenantId: params.tenantId,
+    storeId: params.storeId,
     closedBy: getActorUserId(params.reqUser),
     actualCashAmount,
     expectedCashAmount,
@@ -418,11 +461,12 @@ export async function closeShiftReconciliation(params: {
   });
 
   if (!closed) {
-    throw new ApiError(500, "Dong phien chot ca that bai");
+    throw new ApiError(500, "Đóng phiên ca thất bại");
   }
 
   const detail = await buildDetail({
     reconciliationRow: closed,
+    tenantId: params.tenantId,
     storeId: params.storeId,
   });
 
@@ -433,7 +477,7 @@ export async function closeShiftReconciliation(params: {
     actionType: "SHIFT_CLOSE",
     entityType: "SHIFT_RECONCILIATION",
     entityId: Number(closed.id),
-    note: `Dong ca ${closed.shift_code}`,
+    note: `Đóng ca ${closed.shift_code} - Lệch két: ${varianceCashAmount}`,
     beforeData: {
       status: "open",
       expectedCashInDrawer: summary.expectedCashInDrawer,
@@ -448,72 +492,65 @@ export async function closeShiftReconciliation(params: {
       totalOrders: summary.totalOrders,
       cashOrderCount: summary.cashOrderCount,
       transferOrderCount: summary.transferOrderCount,
-      note: params.note?.trim() || null,
     },
   });
 
   return detail;
 }
 
+/**
+ * 6. Lấy danh sách lịch sử ca làm việc
+ */
 export async function listShiftReconciliations(params: {
+  tenantId: number;
   storeId: number;
   dateFrom?: string;
   dateTo?: string;
   status?: "open" | "closed";
-  shiftCode?: ShiftCode;
+  shiftCode?: "A" | "B";
   limit?: number;
   offset?: number;
 }) {
-  const dateFrom = params.dateFrom ? normalizeDate(params.dateFrom) : undefined;
-  const dateTo = params.dateTo ? normalizeDate(params.dateTo) : undefined;
-
-  if (dateFrom && dateTo && dateFrom > dateTo) {
-    throw new ApiError(400, "dateFrom phai <= dateTo");
-  }
-
   const rows = await repo.listReconciliations({
+    tenantId: params.tenantId,
     storeId: params.storeId,
-    dateFrom,
-    dateTo,
+    dateFrom: params.dateFrom,
+    dateTo: params.dateTo,
     status: params.status,
     shiftCode: params.shiftCode,
-    limit: params.limit ?? 50,
-    offset: params.offset ?? 0,
+    limit: params.limit,
+    offset: params.offset,
   });
 
   return {
-    filters: {
-      storeId: params.storeId,
-      dateFrom: dateFrom || null,
-      dateTo: dateTo || null,
-      status: params.status || null,
-      shiftCode: params.shiftCode || null,
-      limit: params.limit ?? 50,
-      offset: params.offset ?? 0,
-    },
     reconciliations: rows.map(mapReconciliationRow),
   };
 }
 
-export async function assertStoreCanCreatePosOrder(storeId: number) {
-  const current = await repo.findOpenReconciliationByStore(storeId);
+/**
+ * 7. Kiểm tra quyền mở cổng bán hàng (dành cho legacy orders.service.ts nếu có dùng)
+ */
+export async function assertStoreCanCreatePosOrder(storeId: number, tenantId?: number) {
+  let tid = tenantId;
+  if (!tid) {
+    const sMeta = await pool.query(`SELECT tenant_id FROM public.stores WHERE id = $1 LIMIT 1`, [storeId]);
+    tid = sMeta.rows[0]?.tenant_id || 1;
+  }
+
+  const current = await repo.findOpenReconciliationByStore(Number(tid), storeId);
 
   if (!current) {
-    throw new ApiError(400, "Chua mo ca A/B, khong the tao don");
+    throw new ApiError(400, "Chưa mở ca bán hàng (A/B) cho quầy này, không thể tạo đơn");
   }
 
   if (String(current.status) !== "open") {
-    throw new ApiError(400, "Ca hien tai da dong, khong the tao don");
+    throw new ApiError(400, "Ca hiện tại đã đóng, không thể tạo đơn");
   }
 
-  const shiftCode = String(current.shift_code || "");
-  if (!["A", "B"].includes(shiftCode)) {
-    throw new ApiError(400, "Ca hien tai khong cho phep ban hang");
-  }
-
+  const shiftCode = String(current.shift_code || "A");
   return {
     reconciliationId: Number(current.id),
-    shiftCode: shiftCode as ShiftCode,
+    shiftCode: (shiftCode.toUpperCase() === "B" ? "B" : "A") as ShiftCode,
     warning: buildShiftWarning(current),
   };
 }

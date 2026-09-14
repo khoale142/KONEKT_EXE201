@@ -105,17 +105,20 @@ router.post("/office/reset-password", officeResetPassword);
 
 // refresh + me
 router.post("/refresh", refresh);
+router.post("/activate-workspace", refresh);
 router.get("/me", authGuard, me);
 
 // ── KONEKT Multi-Tenant Endpoints ──
 import {
   registerOwnerHandler,
+  registerCanonicalAccountHandler,
   registerStaffHandler,
   loginKonektHandler,
   demoLoginHandler,
 } from "./auth.controller";
 
 router.post("/register-owner", registerOwnerHandler);
+router.post("/register-account", registerCanonicalAccountHandler);
 router.post("/register-staff", registerStaffHandler);
 router.post("/login-konekt", loginKonektHandler);
 router.post("/demo-login", demoLoginHandler);

@@ -38,6 +38,16 @@ export default function MerchantLoginPage() {
       const data = await authApi.loginKonekt({ identifier: identifier.trim(), password });
       setTokensAndUser(data.accessToken, data.refreshToken, data.user);
 
+      if (data.user?.authMode === "canonical" && data.user?.workspaceSelectionRequired) {
+        navigate("/workspace/select-tenant", { replace: true });
+        return;
+      }
+
+      if (data.user?.authMode === "canonical" && !data.user?.storeId && data.user?.roles?.[0] !== "owner") {
+        navigate("/workspace/select-store", { replace: true });
+        return;
+      }
+
       // Điều hướng thông minh theo vai trò và trạng thái Onboarding
       if (data.user?.requireStoreJoin) {
         navigate("/workspace/join-store", { replace: true });
@@ -441,19 +451,19 @@ export default function MerchantLoginPage() {
             <div>
               <span>Bạn là nhân viên mới? </span>
               <Link
-                to="/register/staff"
+                to="/register/account"
                 style={{ color: "#3D5E46", fontWeight: 700, textDecoration: "underline" }}
               >
-                Tạo Tài Khoản Nhân Viên
+                Tạo Tài Khoản KONEKT
               </Link>
             </div>
             <div>
               <span>Chưa có cửa hàng? </span>
               <Link
-                to="/register/owner"
+                to="/register/account"
                 style={{ color: "#3D5E46", fontWeight: 700, textDecoration: "underline" }}
               >
-                Khởi Tạo Quán Mới (Chủ Quán)
+                Mở cửa hàng / Bắt đầu miễn phí
               </Link>
             </div>
           </div>

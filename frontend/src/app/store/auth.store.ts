@@ -11,9 +11,30 @@ export type AuthStoreItem = {
   name: string;
 };
 
+export type CanonicalWorkspaceMembership = {
+  membershipId: number;
+  tenantId: number;
+  tenantName: string;
+  tenantCode: string;
+  tenantSlug: string;
+  role: "owner" | "manager" | "leader" | "staff";
+  storeAccessScope: "all" | "selected";
+  stores: AuthStoreItem[];
+};
+
 export type AuthUser = {
+  authSource?: 'konekt';
+  authMode?: 'canonical';
+  scope?: 'account' | 'onboarding' | 'workspace';
+  requireStoreJoin?: boolean;
+  onboarding?: { status: string; request: unknown };
+
   id?: number;
   sub: string;
+  accountId?: number;
+  membershipId?: number;
+  memberships?: CanonicalWorkspaceMembership[];
+  workspaceSelectionRequired?: boolean;
   username?: string;
   fullName?: string;
   email?: string;
@@ -186,6 +207,8 @@ function extractUserFromMePayload(payload: any, fallback: AuthUser | null): Auth
     return fallback ? normalizeUser(fallback) : null;
   }
 
+  // KONEKT /me is a complete DB-backed profile; never restore stale scope from storage.
+  if (raw.authSource === 'konekt') return normalizeUser(raw as AuthUser);
   const idValue = raw.id ?? raw.userId ?? raw.customerId ?? fallback?.id;
   const id = Number(idValue);
 

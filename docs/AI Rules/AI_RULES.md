@@ -114,3 +114,8 @@ Mọi tác vụ kỹ thuật trong dự án **BẮT BUỘC** phải tuân theo c
     * Trước khi thực hiện bất kỳ tác vụ nào, AI Agent **BẮT BUỘC** phải đọc các skills chuyên biệt tương ứng đã được cài đặt trong thư mục `.agents/skills/`:
       - **Khi làm việc với UI / Frontend**: Bắt buộc đọc bộ `taste-skill` (`.agents/skills/design-taste-frontend`, `minimalist-ui`, `high-end-visual-design`, `brandkit`) để định hình thẩm mỹ cao cấp, chống thiết kế rập khuôn (anti-slop), căn chỉnh visual density, typography và tuân thủ nghiêm ngặt phổ màu xanh rêu đậm & kem ngà.
       - **Khi làm việc với Database / Backend**: Bắt buộc đọc bộ `supabase` và `supabase-postgres-best-practices` (`.agents/skills/supabase-postgres-best-practices`, `.agents/skills/supabase`) để tuân thủ thiết kế schema chuẩn mực, đánh index hiệu năng cao, viết RLS policy an toàn và quản lý connection pooling.
+11. **ƯU TIÊN TÍCH HỢP & TỐI ƯU MODULE CŨ (INTEGRATION-FIRST)**:
+    * Trước khi tạo trang, route, component hoặc API mới, bắt buộc kiểm tra các module/UI/API hiện có phục vụ cùng nghiệp vụ.
+    * Ưu tiên mở rộng, tái sử dụng và gộp tính năng vào trang nghiệp vụ hiện hữu mà người dùng đang dùng (ví dụ tab/hub quản trị), thay vì tạo luồng hoặc màn hình song song.
+    * Chỉ tạo mới khi không thể mở rộng an toàn hoặc khi việc tách riêng có lợi ích kiến trúc rõ ràng; Plan phải nêu lý do và cách liên kết từ UI hiện hữu.
+    * Khi giữ luồng cũ để tương thích, phải làm rõ luồng nào là primary và bảo đảm tính năng mới xuất hiện ở giao diện primary; không để chức năng chỉ tồn tại ở một route phụ khó phát hiện.

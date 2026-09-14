@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { authGuard } from "../../middlewares/authGuard";
 import { roleGuard } from "../../middlewares/roleGuard";
+import { requirePermission, requireStoreAccess } from '../../middlewares/canonicalAuthorizationGuard';
 import {
   checkInHandler,
   checkOutHandler,
@@ -34,6 +35,7 @@ import {
 const router = Router();
 
 router.use(authGuard);
+router.use(requirePermission('pos.access'), requireStoreAccess((req) => req.user?.storeId));
 
 /**
  * STORE MANAGER

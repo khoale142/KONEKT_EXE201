@@ -4,7 +4,13 @@ import jwt, { type SignOptions } from "jsonwebtoken";
 export type Portal = "CUSTOMER" | "STORE" | "OFFICE" | "POS";
 
 export type AccessClaims = {
+  authSource?: 'konekt';
+  authMode?: 'canonical';
+  scope?: 'account' | 'onboarding' | 'workspace';
+  membershipIds?: number[]; // Only memberships proven with the login credential.
   sub: string;            // user id (string)
+  accountId?: number;     // Canonical global Account (users.id).
+  membershipId?: number;  // Canonical active tenant_memberships.id.
   portal: Portal;
   roles?: string[];
   tenantId?: number;      // Multi-tenant: ID thương hiệu (REQ-01)
