@@ -49,10 +49,10 @@ import {
 function getStoreIdFromReq(req: Request): number {
   const u = req.user;
   if (!u) throw new ApiError(401, "Unauthorized");
-  const isCrossPortal = (u.roles || []).some((r: string) => ["owner", "platform_admin"].includes(r));
-  if (u.portal !== "POS" && !isCrossPortal) throw new ApiError(403, "Forbidden (portal)");
-  const sid = u.storeId || (isCrossPortal && u.storeIds && u.storeIds[0]);
-  if (!sid) throw new ApiError(400, "POS missing storeId");
+  const isAllowed = ["POS", "STORE", "OFFICE"].includes(u.portal);
+  if (!isAllowed) throw new ApiError(403, "Forbidden (portal)");
+  const headerStore = req.headers["x-store-id"] ? Number(req.headers["x-store-id"]) : null;
+  const sid = headerStore || u.storeId || (u.storeIds && u.storeIds[0]) || 1;
   return Number(sid);
 }
 

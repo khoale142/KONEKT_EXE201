@@ -149,3 +149,14 @@ Hệ thống được tái cấu trúc thành **5 vai trò người dùng chuẩ
 | `CUST_LOY` | Tích điểm & Đổi quà | ❌ | ⚙️ Cấu hình | 👁️ Tra cứu quầy | 👁️ Tra cứu quầy | ✅ Sở hữu |
 | `SAAS_TEN` | Quản lý danh sách Tenant | ✅ Toàn quyền | ❌ | ❌ | ❌ | ❌ |
 | `SAAS_REG` | Đăng ký mở quán (Tenant) | ❌ | 📝 Tự đăng ký | ❌ | ❌ | ❌ |
+
+
+## Bổ sung PLAN-15B — 12/09/2026
+- Luồng mời/duyệt nhân sự chỉ dành cho Owner (hoặc platform_admin trong tenant hợp lệ). Manager/Leader/Staff không được lấy mã quản trị hoặc duyệt, kể cả khi dữ liệu customPermissions cũ còn can_invite_staff.
+- Ba role được Owner phân khi duyệt: staff, shift_leader, store_manager. Nguyện vọng ứng tuyển không quyết định role.
+- Staff và Shift Leader: portal STORE, trang /store/staff. Store Manager: portal STORE, trang /store/manager. Cả ba chỉ được chọn store đã phân công.
+- Tài khoản chưa phân store mang scope onboarding: chỉ được me, kiểm tra mã, gửi yêu cầu, xem trạng thái cá nhân và làm mới/kích hoạt phiên. Token onboarding cũ không trở thành token nghiệp vụ chỉ vì DB đã duyệt.
+- Login/me/refresh/switch dùng cùng resolver KONEKT; tài khoản và store bị khóa được kiểm tra từ DB. Phiên cũ thiếu nguồn định danh KONEKT phải đăng nhập lại.
+- Owner nhiều thương hiệu vẫn dùng nhiều membership. Chỉ các membership đã chứng minh bằng mật khẩu lúc login mới nằm trong session; cùng email không tự cấp quyền.
+- Quy định này bổ sung phần onboarding; không xác nhận toàn bộ module kho, lịch, lương, KDS hoặc thanh toán legacy đã chuyển đổi sang schema mới.
+- Bằng chứng: [VERIFY-15B](Developing/logs/VERIFY-15B_STAFF_ONBOARDING.md).

@@ -30,3 +30,6 @@ Mỗi file requirement cần đảm bảo các phần sau:
 | Mã REQ | Tên Yêu Cầu | Trạng thái | Ngày tạo |
 | :--- | :--- | :---: | :---: |
 | [REQ-01](./REQ-01_MULTI_TENANT_ROLE_RESTRUCTURING.md) | Tái cấu trúc Role (Owner-Centric) & Cô lập Dữ liệu Multi-Tenancy | `Approved` | 08/09/2026 |
+| [REQ-15B](./REQ-15B_OWNER_STORE_INVITES_AND_STAFF_ACTIVATION.md) | Mã mời Owner, gia nhập Store và kích hoạt Staff theo role | `Implemented / Verify pending` | 11/09/2026 |
+| [REQ-17](./REQ-17_CANONICAL_ACCOUNT_MEMBERSHIP_FOUNDATION.md) | Nền tảng Account toàn cục, Tenant Membership và Store Access canonical | `Implemented — DB validation pending` | 12/09/2026 |
+| [REQ-18](./REQ-18_UNIFIED_AUTH_AND_WORKSPACE_CONTEXT.md) | Phase 2: Xác thực Account thống nhất và ngữ cảnh Workspace canonical | `Implemented — live DB rollout pending` | 13/09/2026 |

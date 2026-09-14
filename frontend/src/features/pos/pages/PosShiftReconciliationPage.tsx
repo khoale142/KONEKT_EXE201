@@ -1,6 +1,14 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
+  CheckCircle2,
+  History,
+  ArrowLeft,
+  RefreshCw,
+  ShoppingCart,
+  Sparkles,
+} from "lucide-react";
+import {
   closeShiftReconciliation,
   getCurrentShiftReconciliation,
   getShiftReconciliationDetail,
@@ -93,6 +101,8 @@ export default function PosShiftReconciliationPage() {
   const [submittingVerify, setSubmittingVerify] = useState(false);
   const [submittingClose, setSubmittingClose] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [successMsg, setSuccessMsg] = useState<string | null>(null);
+  const [isViewingHistory, setIsViewingHistory] = useState<boolean>(false);
 
   const [detail, setDetail] = useState<ShiftReconciliationDetailResponse | null>(null);
   const [history, setHistory] = useState<ShiftReconciliationItem[]>([]);
@@ -113,17 +123,26 @@ export default function PosShiftReconciliationPage() {
   const [historyShiftCode, setHistoryShiftCode] = useState<"" | "A" | "B">("");
 
   const loadCurrent = async () => {
-    const r = await getCurrentShiftReconciliation();
-    setDetail(r.current);
-    setVerification(null);
+    setReloading(true);
+    setError(null);
+    try {
+      const r = await getCurrentShiftReconciliation();
+      setDetail(r.current);
+      setVerification(null);
+      setIsViewingHistory(false);
 
-    if (r.current?.reconciliation) {
-      setWorkDate(r.current.reconciliation.workDate);
-      setShiftCode(r.current.reconciliation.shiftCode);
-      setCloseNote(r.current.reconciliation.note || "");
-      setActualCashAmount("");
-      setConfirmActualCashAmount("");
-      setConfirmText("");
+      if (r.current?.reconciliation) {
+        setWorkDate(r.current.reconciliation.workDate);
+        setShiftCode(r.current.reconciliation.shiftCode);
+        setCloseNote(r.current.reconciliation.note || "");
+        setActualCashAmount("");
+        setConfirmActualCashAmount("");
+        setConfirmText("");
+      }
+    } catch (e: any) {
+      setError(e?.response?.data?.message || e.message || "Tải ca hiện tại thất bại");
+    } finally {
+      setReloading(false);
     }
   };
 
@@ -144,7 +163,7 @@ export default function PosShiftReconciliationPage() {
     try {
       await Promise.all([loadCurrent(), loadHistory()]);
     } catch (e: any) {
-      setError(e?.response?.data?.message || e.message || "Load shift reconciliation failed");
+      setError(e?.response?.data?.message || e.message || "Tải dữ liệu ca thất bại");
     } finally {
       setLoading(false);
     }
@@ -154,27 +173,10 @@ export default function PosShiftReconciliationPage() {
     loadAll();
   }, []);
 
-  const reloadCurrentDetail = async () => {
-    if (!detail?.reconciliation?.id) {
-      await loadCurrent();
-      return;
-    }
-
-    setReloading(true);
-    setError(null);
-    try {
-      const r = await getShiftReconciliationDetail(detail.reconciliation.id);
-      setDetail(r);
-    } catch (e: any) {
-      setError(e?.response?.data?.message || e.message || "Reload current failed");
-    } finally {
-      setReloading(false);
-    }
-  };
-
   const handleOpenShift = async () => {
     setSubmittingOpen(true);
     setError(null);
+    setSuccessMsg(null);
     try {
       const opening = Number((openingCashAmount || "").replace(/[^\d]/g, ""));
       const r = await openShiftReconciliation({
@@ -184,14 +186,16 @@ export default function PosShiftReconciliationPage() {
         note: openNote.trim() || undefined,
       });
       setDetail(r);
+      setIsViewingHistory(false);
       setVerification(null);
       setActualCashAmount("");
       setConfirmActualCashAmount("");
       setConfirmText("");
       setCloseNote("");
+      setSuccessMsg(`Đã mở thành công ca ${shiftCode} ngày ${workDate}! Quầy POS hiện đã sẵn sàng nhận order.`);
       await loadHistory();
     } catch (e: any) {
-      setError(e?.response?.data?.message || e.message || "Open shift failed");
+      setError(e?.response?.data?.message || e.message || "Mở ca thất bại");
     } finally {
       setSubmittingOpen(false);
     }
@@ -212,7 +216,7 @@ export default function PosShiftReconciliationPage() {
       setConfirmText("");
     } catch (e: any) {
       setVerification(null);
-      setError(e?.response?.data?.message || e.message || "Verify close failed");
+      setError(e?.response?.data?.message || e.message || "Kiểm tra số liệu thất bại");
     } finally {
       setSubmittingVerify(false);
     }
@@ -223,21 +227,37 @@ export default function PosShiftReconciliationPage() {
 
     setSubmittingClose(true);
     setError(null);
+    setSuccessMsg(null);
     try {
       const actual = Number((actualCashAmount || "").replace(/[^\d]/g, ""));
       const confirmAmount = Number((confirmActualCashAmount || "").replace(/[^\d]/g, ""));
-      const r = await closeShiftReconciliation(detail.reconciliation.id, {
+      await closeShiftReconciliation(detail.reconciliation.id, {
         actualCashAmount: Number.isFinite(actual) ? actual : 0,
         confirmActualCashAmount: Number.isFinite(confirmAmount) ? confirmAmount : 0,
         confirmText: confirmText.trim(),
         note: closeNote.trim() || undefined,
       });
-      setDetail(r);
+
+      const closedShiftCode = detail.reconciliation.shiftCode;
+      const closedDate = detail.reconciliation.workDate;
+      const nextShiftCode = closedShiftCode === "A" ? "B" : "A";
+
+      setDetail(null);
       setVerification(null);
+      setIsViewingHistory(false);
+      setActualCashAmount("");
+      setConfirmActualCashAmount("");
+      setConfirmText("");
+      setCloseNote("");
+      setOpeningCashAmount("");
+      setOpenNote("");
+      setShiftCode(nextShiftCode);
+      setSuccessMsg(
+        `Chốt ca ${closedShiftCode} ngày ${closedDate} thành công! Két tiền đã được đối soát chính xác và ca đã đóng hoàn tất.`
+      );
       await loadHistory();
-      nav("/pos", { replace: true });
     } catch (e: any) {
-      setError(e?.response?.data?.message || e.message || "Close shift failed");
+      setError(e?.response?.data?.message || e.message || "Đóng ca thất bại");
     } finally {
       setSubmittingClose(false);
     }
@@ -248,26 +268,85 @@ export default function PosShiftReconciliationPage() {
       <div className="pos-shell pos-shell--wide">
       <div className="pos-topbar">
         <div className="pos-topbar__main">
-          <div className="pos-topbar__eyebrow">Shift reconciliation</div>
-          <h2 className="pos-topbar__title">Chốt ca và kiểm quỹ</h2>
+          <div className="pos-topbar__eyebrow">Cash Drawer & Reconciliation</div>
+          <h2 className="pos-topbar__title">Chốt ca & Kiểm quỹ POS</h2>
           <p className="pos-topbar__subtitle">
-            Mở ca A/B, đối soát tiền mặt và xác thực đóng ca theo 2 bước.
+            Quản lý phiên làm việc, đối soát tiền mặt đầu/cuối ca và xác thực đóng ca 2 bước.
           </p>
         </div>
 
         <div className="pos-inline-actions">
-          <button onClick={reloadCurrentDetail} disabled={reloading || !detail}>
+          <button
+            onClick={loadCurrent}
+            disabled={reloading}
+            style={{ display: "inline-flex", alignItems: "center", gap: 6 }}
+          >
+            <RefreshCw size={14} className={reloading ? "animate-spin" : ""} />
             {reloading ? "Đang tải..." : "Tải lại ca hiện tại"}
           </button>
-          <button onClick={loadHistory} disabled={loading}>
-            Tải lịch sử
+          <button
+            onClick={loadHistory}
+            disabled={loading}
+            style={{ display: "inline-flex", alignItems: "center", gap: 6 }}
+          >
+            <History size={14} /> Tải lịch sử
           </button>
-          <button onClick={() => nav("/pos")}>Về dashboard</button>
+          {detail && detail.reconciliation.status === "open" ? (
+            <button
+              onClick={() => nav("/pos/order")}
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 6,
+                background: "#364D39",
+                color: "#FAF6F3",
+                fontWeight: 700,
+              }}
+            >
+              <ShoppingCart size={14} /> Vào Bán Hàng POS
+            </button>
+          ) : null}
+          <button onClick={() => nav("/pos")}>Về Dashboard</button>
         </div>
       </div>
 
+      {successMsg ? (
+        <div
+          className="pos-alert pos-alert--success"
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: 12,
+            padding: "14px 18px",
+            borderRadius: 12,
+            background: "#ecfdf5",
+            border: "1px solid #a7f3d0",
+            color: "#065f46",
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: 10, fontWeight: 600 }}>
+            <CheckCircle2 size={18} color="#059669" />
+            <span>{successMsg}</span>
+          </div>
+          <button
+            onClick={() => setSuccessMsg(null)}
+            style={{
+              background: "transparent",
+              border: "none",
+              cursor: "pointer",
+              fontSize: 12,
+              color: "#059669",
+              textDecoration: "underline",
+            }}
+          >
+            Đóng
+          </button>
+        </div>
+      ) : null}
+
       {error ? <div className="pos-alert pos-alert--danger">{error}</div> : null}
-      {loading ? <div className="pos-alert pos-alert--info">Đang tải dữ liệu...</div> : null}
+      {loading ? <div className="pos-alert pos-alert--info">Đang tải dữ liệu ca làm việc...</div> : null}
 
       {!loading ? (
         <div
@@ -276,69 +355,289 @@ export default function PosShiftReconciliationPage() {
         >
           <div className="pos-stack">
             {!detail ? (
-              <SectionCard title="Mở ca mới">
-                <div style={{ display: "grid", gap: 12 }}>
+              <SectionCard title="Mở ca bán hàng mới (Shift Opening)">
+                <div style={{ display: "grid", gap: 14 }}>
+                  <div
+                    style={{
+                      padding: "10px 14px",
+                      borderRadius: 10,
+                      background: "#F4EFEB",
+                      border: "1px solid #DFD6C7",
+                      fontSize: 13,
+                      color: "#364D39",
+                      lineHeight: 1.4,
+                    }}
+                  >
+                    💡 <b>Quy trình đầu ca:</b> Chọn loại ca làm việc, kiểm đếm tiền lẻ đầu ca trong két và bấm Mở ca để bắt đầu phục vụ đơn hàng trên POS.
+                  </div>
+
                   <div>
-                    <div style={{ fontSize: 13, marginBottom: 4 }}>Ngày làm việc</div>
+                    <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 6, color: "#2A3B2C" }}>
+                      Ngày làm việc
+                    </div>
                     <input
                       type="date"
                       value={workDate}
                       onChange={(e) => setWorkDate(e.target.value)}
-                      style={{ width: "100%", padding: 10 }}
+                      style={{
+                        width: "100%",
+                        padding: "10px 12px",
+                        borderRadius: 8,
+                        border: "1px solid #DFD6C7",
+                        fontSize: 14,
+                        background: "#fff",
+                      }}
                     />
                   </div>
 
                   <div>
-                    <div style={{ fontSize: 13, marginBottom: 4 }}>Loại ca</div>
-                    <div className="pos-inline-actions">
+                    <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 6, color: "#2A3B2C" }}>
+                      Loại ca làm việc
+                    </div>
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
                       <button
+                        type="button"
                         onClick={() => setShiftCode("A")}
-                        className={shiftCode === "A" ? "pos-select-card is-active" : "pos-select-card"}
-                        style={{ padding: "10px 14px" }}
+                        style={{
+                          padding: "12px 16px",
+                          borderRadius: 10,
+                          border: shiftCode === "A" ? "2px solid #364D39" : "1px solid #DFD6C7",
+                          background: shiftCode === "A" ? "#FAF6F3" : "#fff",
+                          color: "#2A3B2C",
+                          textAlign: "left",
+                          cursor: "pointer",
+                          transition: "all 0.15s ease",
+                        }}
                       >
-                        Ca A (07:00 - 15:00)
+                        <div style={{ fontWeight: 800, fontSize: 14 }}>Ca A (Sáng / Trưa)</div>
+                        <div style={{ fontSize: 12, color: "#6b5b4d", marginTop: 4 }}>
+                          07:00 → 15:00
+                        </div>
                       </button>
+
                       <button
+                        type="button"
                         onClick={() => setShiftCode("B")}
-                        className={shiftCode === "B" ? "pos-select-card is-active" : "pos-select-card"}
-                        style={{ padding: "10px 14px" }}
+                        style={{
+                          padding: "12px 16px",
+                          borderRadius: 10,
+                          border: shiftCode === "B" ? "2px solid #364D39" : "1px solid #DFD6C7",
+                          background: shiftCode === "B" ? "#FAF6F3" : "#fff",
+                          color: "#2A3B2C",
+                          textAlign: "left",
+                          cursor: "pointer",
+                          transition: "all 0.15s ease",
+                        }}
                       >
-                        Ca B (15:00 - 23:00)
+                        <div style={{ fontWeight: 800, fontSize: 14 }}>Ca B (Chiều / Tối)</div>
+                        <div style={{ fontSize: 12, color: "#6b5b4d", marginTop: 4 }}>
+                          15:00 → 23:00
+                        </div>
                       </button>
                     </div>
                   </div>
 
                   <div>
-                    <div style={{ fontSize: 13, marginBottom: 4 }}>Tiền đầu ca trong két</div>
+                    <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 6, color: "#2A3B2C" }}>
+                      Tiền mặt đầu ca trong két (Số dư mở két)
+                    </div>
                     <input
                       value={openingCashAmount}
                       onChange={(e) => setOpeningCashAmount(e.target.value.replace(/[^\d]/g, ""))}
-                      placeholder="VD: 200000"
+                      placeholder="VD: 500000"
                       inputMode="numeric"
-                      style={{ width: "100%", padding: 10 }}
+                      style={{
+                        width: "100%",
+                        padding: "10px 12px",
+                        borderRadius: 8,
+                        border: "1px solid #DFD6C7",
+                        fontSize: 15,
+                        fontWeight: 600,
+                        background: "#fff",
+                      }}
                     />
+
+                    <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 8 }}>
+                      {[0, 200000, 500000, 1000000, 2000000].map((amt) => (
+                        <button
+                          key={amt}
+                          type="button"
+                          onClick={() => setOpeningCashAmount(String(amt))}
+                          style={{
+                            padding: "4px 10px",
+                            fontSize: 12,
+                            borderRadius: 6,
+                            border: "1px solid #DFD6C7",
+                            background: Number(openingCashAmount) === amt ? "#364D39" : "#FAF6F3",
+                            color: Number(openingCashAmount) === amt ? "#FAF6F3" : "#364D39",
+                            fontWeight: 600,
+                            cursor: "pointer",
+                          }}
+                        >
+                          {amt === 0 ? "0 đ" : `${(amt / 1000).toLocaleString()}k`}
+                        </button>
+                      ))}
+                    </div>
+
+                    {openingCashAmount ? (
+                      <div style={{ fontSize: 12, color: "#364D39", fontWeight: 600, marginTop: 6 }}>
+                        Định dạng: {Number(openingCashAmount).toLocaleString()} đ
+                      </div>
+                    ) : null}
                   </div>
 
                   <div>
-                    <div style={{ fontSize: 13, marginBottom: 4 }}>Ghi chú</div>
+                    <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 6, color: "#2A3B2C" }}>
+                      Ghi chú mở ca (tùy chọn)
+                    </div>
                     <textarea
                       value={openNote}
                       onChange={(e) => setOpenNote(e.target.value)}
-                      placeholder="Mô tả ngắn cho ca này (nếu có)"
-                      rows={3}
-                      style={{ width: "100%", padding: 10, resize: "vertical" }}
+                      placeholder="Ghi chú nhân sự vào ca, bàn giao ca trước (nếu có)..."
+                      rows={2}
+                      style={{
+                        width: "100%",
+                        padding: "10px 12px",
+                        borderRadius: 8,
+                        border: "1px solid #DFD6C7",
+                        fontSize: 13,
+                        background: "#fff",
+                        resize: "vertical",
+                      }}
                     />
                   </div>
 
-                  <div>
-                    <button onClick={handleOpenShift} disabled={submittingOpen}>
-                      {submittingOpen ? "Đang mở ca..." : `Mở ca ${shiftCode}`}
+                  <div style={{ marginTop: 4 }}>
+                    <button
+                      onClick={handleOpenShift}
+                      disabled={submittingOpen}
+                      style={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: 8,
+                        padding: "12px 20px",
+                        borderRadius: 10,
+                        background: "#364D39",
+                        color: "#FAF6F3",
+                        fontWeight: 700,
+                        fontSize: 14,
+                        border: "none",
+                        cursor: submittingOpen ? "not-allowed" : "pointer",
+                        boxShadow: "0 2px 6px rgba(54, 77, 57, 0.2)",
+                      }}
+                    >
+                      <Sparkles size={16} />
+                      {submittingOpen ? "Đang mở ca làm việc..." : `Mở Ca ${shiftCode} & Vào Bán Hàng`}
                     </button>
                   </div>
                 </div>
               </SectionCard>
             ) : (
               <>
+                {isViewingHistory || detail.reconciliation.status === "closed" ? (
+                  <div
+                    style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                      padding: "12px 16px",
+                      borderRadius: 12,
+                      background: "#FAF6F3",
+                      border: "1px solid #DFD6C7",
+                      gap: 12,
+                      flexWrap: "wrap",
+                    }}
+                  >
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, color: "#364D39", fontWeight: 700 }}>
+                      <History size={18} />
+                      <span>Đang xem chi tiết ca lưu trữ: Ca {detail.reconciliation.shiftCode} ({detail.reconciliation.workDate})</span>
+                      <span
+                        style={{
+                          fontSize: 12,
+                          padding: "2px 10px",
+                          borderRadius: 999,
+                          background: detail.reconciliation.status === "closed" ? "#E8E0D5" : "#DCFCE7",
+                          color: detail.reconciliation.status === "closed" ? "#6b5b4d" : "#166534",
+                          fontWeight: 700,
+                        }}
+                      >
+                        {detail.reconciliation.status === "closed" ? "Đã đóng" : "Đang mở"}
+                      </span>
+                    </div>
+                    <button
+                      onClick={loadCurrent}
+                      style={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: 6,
+                        padding: "6px 14px",
+                        borderRadius: 8,
+                        background: "#364D39",
+                        color: "#FAF6F3",
+                        fontWeight: 600,
+                        border: "none",
+                        cursor: "pointer",
+                        fontSize: 13,
+                      }}
+                    >
+                      <ArrowLeft size={14} /> Quay về ca hiện tại / Mở ca mới
+                    </button>
+                  </div>
+                ) : (
+                  <div
+                    style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                      padding: "14px 18px",
+                      borderRadius: 14,
+                      background: "#364D39",
+                      color: "#FAF6F3",
+                      gap: 12,
+                      flexWrap: "wrap",
+                    }}
+                  >
+                    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                      <span
+                        style={{
+                          display: "inline-block",
+                          width: 10,
+                          height: 10,
+                          borderRadius: "50%",
+                          background: "#22c55e",
+                          boxShadow: "0 0 0 3px rgba(34, 197, 94, 0.3)",
+                        }}
+                      />
+                      <div>
+                        <div style={{ fontWeight: 800, fontSize: 15 }}>
+                          Ca {detail.reconciliation.shiftCode} đang hoạt động • {detail.store.name}
+                        </div>
+                        <div style={{ fontSize: 12, opacity: 0.85, marginTop: 2 }}>
+                          Ngày {detail.reconciliation.workDate} • Bắt đầu: {formatDateTime(detail.reconciliation.startedAt)}
+                        </div>
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => nav("/pos/order")}
+                      style={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: 6,
+                        padding: "8px 16px",
+                        borderRadius: 10,
+                        background: "#FAF6F3",
+                        color: "#364D39",
+                        fontWeight: 700,
+                        fontSize: 13,
+                        border: "none",
+                        cursor: "pointer",
+                      }}
+                    >
+                      <ShoppingCart size={15} /> Mở POS Bán Hàng
+                    </button>
+                  </div>
+                )}
+
                 {detail.reconciliation.warning ? (
                   <div
                     style={{
@@ -353,16 +652,16 @@ export default function PosShiftReconciliationPage() {
                   </div>
                 ) : null}
 
-                <SectionCard title="Thông tin ca hiện tại">
+                <SectionCard title="Thông tin ca làm việc">
                   <div style={{ display: "grid", gap: 10 }}>
                     <div><b>Cửa hàng:</b> {detail.store.name}</div>
                     <div><b>Mã cửa hàng:</b> {detail.store.code}</div>
                     <div><b>Địa chỉ:</b> {detail.store.address || "--"}</div>
                     <div><b>Ngày làm việc:</b> {detail.reconciliation.workDate}</div>
                     <div><b>Loại ca:</b> {detail.reconciliation.shiftCode}</div>
-                    <div><b>Khung giờ:</b> {formatDateTime(detail.reconciliation.scheduledStartAt)} → {formatDateTime(detail.reconciliation.scheduledEndAt)}</div>
+                    <div><b>Khung giờ quy định:</b> {formatDateTime(detail.reconciliation.scheduledStartAt)} → {formatDateTime(detail.reconciliation.scheduledEndAt)}</div>
                     <div><b>Bắt đầu thực tế:</b> {formatDateTime(detail.reconciliation.startedAt)}</div>
-                    <div><b>Đóng ca:</b> {formatDateTime(detail.reconciliation.closedAt)}</div>
+                    <div><b>Đóng ca thực tế:</b> {formatDateTime(detail.reconciliation.closedAt)}</div>
                     <div>
                       <b>Trạng thái:</b>{" "}
                       <span
@@ -372,6 +671,7 @@ export default function PosShiftReconciliationPage() {
                           background:
                             detail.reconciliation.status === "open" ? "#dcfce7" : "#e5e7eb",
                           display: "inline-block",
+                          fontWeight: 700,
                         }}
                       >
                         {detail.reconciliation.status === "open" ? "Đang mở" : "Đã đóng"}
@@ -435,7 +735,7 @@ export default function PosShiftReconciliationPage() {
                       <div><b>Tiền mặt thực tế:</b> {formatMoney(detail.reconciliation.actualCashAmount || 0)}</div>
                       <div>
                         <b>Chênh lệch:</b>{" "}
-                        <span style={{ color: detail.reconciliation.varianceCashAmount === 0 ? "#111" : "crimson" }}>
+                        <span style={{ color: detail.reconciliation.varianceCashAmount === 0 ? "#111" : "crimson", fontWeight: 700 }}>
                           {detail.reconciliation.varianceCashAmount > 0 ? "+" : ""}
                           {formatMoney(detail.reconciliation.varianceCashAmount)}
                         </span>
@@ -444,7 +744,7 @@ export default function PosShiftReconciliationPage() {
                   ) : (
                     <div style={{ display: "grid", gap: 14 }}>
                       <div>
-                        <div style={{ fontSize: 13, marginBottom: 4 }}>Bước 1 - Nhập tiền mặt đếm thực tế</div>
+                        <div style={{ fontSize: 13, marginBottom: 4 }}>Bước 1 - Nhập tiền mặt đếm thực tế trong két</div>
                         <input
                           value={actualCashAmount}
                           onChange={(e) => {
@@ -455,6 +755,11 @@ export default function PosShiftReconciliationPage() {
                           inputMode="numeric"
                           style={{ width: "100%", padding: 10 }}
                         />
+                        {actualCashAmount ? (
+                          <div style={{ fontSize: 12, color: "#364D39", fontWeight: 600, marginTop: 4 }}>
+                            Số tiền: {Number(actualCashAmount).toLocaleString()} đ
+                          </div>
+                        ) : null}
                       </div>
 
                       <div
@@ -480,7 +785,7 @@ export default function PosShiftReconciliationPage() {
 
                       <div>
                         <button onClick={handleVerifyClose} disabled={submittingVerify || !actualCashAmount}>
-                          {submittingVerify ? "Đang kiểm tra..." : "Bước 1 - Kiểm tra số liệu"}
+                          {submittingVerify ? "Đang kiểm tra..." : "Bước 1 - Kiểm tra số liệu & Đối soát"}
                         </button>
                       </div>
 
@@ -500,9 +805,10 @@ export default function PosShiftReconciliationPage() {
                           <div><b>Tiền dự kiến trong két:</b> {formatMoney(verification.verification.expectedCashInDrawer)}</div>
                           <div>
                             <b>Chênh lệch tạm tính:</b>{" "}
-                            <span style={{ color: verification.verification.variancePreview === 0 ? "#111" : "crimson" }}>
+                            <span style={{ color: verification.verification.variancePreview === 0 ? "#166534" : "crimson", fontWeight: 700 }}>
                               {verification.verification.variancePreview > 0 ? "+" : ""}
                               {formatMoney(verification.verification.variancePreview)}
+                              {verification.verification.variancePreview === 0 ? " (Khớp 100% két)" : ""}
                             </span>
                           </div>
 
@@ -531,14 +837,17 @@ export default function PosShiftReconciliationPage() {
                               placeholder="Nhập lại chuỗi xác nhận"
                               style={{ width: "100%", padding: 10 }}
                             />
+                            <div style={{ fontSize: 12, color: "#065f46", marginTop: 4 }}>
+                              * Chấp nhận cả <b>XÁC NHẬN ĐÓNG CA</b> hoặc <b>XAC NHAN DONG CA</b> (không phân biệt chữ hoa/thường).
+                            </div>
                           </div>
 
                           <div>
-                            <div style={{ fontSize: 13, marginBottom: 4 }}>Ghi chú đóng ca</div>
+                            <div style={{ fontSize: 13, marginBottom: 4 }}>Ghi chú đóng ca (lý do lệch nếu có)</div>
                             <textarea
                               value={closeNote}
                               onChange={(e) => setCloseNote(e.target.value)}
-                              placeholder="VD: lech 20k nghi do thoi tien"
+                              placeholder="VD: Khớp két / Lệch do trả nhầm tiền thối..."
                               rows={3}
                               style={{ width: "100%", padding: 10, resize: "vertical" }}
                             />
@@ -546,7 +855,7 @@ export default function PosShiftReconciliationPage() {
 
                           <div>
                             <button onClick={handleCloseShift} disabled={submittingClose}>
-                              {submittingClose ? "Đang đóng ca..." : "Bước 2 - Xác nhận đóng ca"}
+                              {submittingClose ? "Đang đóng ca..." : "Bước 2 - Hoàn tất đóng ca & Chốt sổ quỹ"}
                             </button>
                           </div>
                         </div>
@@ -759,9 +1068,11 @@ export default function PosShiftReconciliationPage() {
                       key={x.id}
                       onClick={async () => {
                         setError(null);
+                        setSuccessMsg(null);
                         try {
                           const r = await getShiftReconciliationDetail(x.id);
                           setDetail(r);
+                          setIsViewingHistory(true);
                           setVerification(null);
                           setCloseNote(r.reconciliation.note || "");
                           setActualCashAmount("");
@@ -771,7 +1082,7 @@ export default function PosShiftReconciliationPage() {
                           setError(
                             e?.response?.data?.message ||
                               e.message ||
-                              "Load reconciliation detail failed"
+                              "Tải chi tiết ca thất bại"
                           );
                         }
                       }}

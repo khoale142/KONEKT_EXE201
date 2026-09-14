@@ -38,19 +38,22 @@ function getActorUserId(input: { actorUserId?: number | null; reqUser?: any }) {
 }
 
 async function findOpenReconciliationId(storeId: number) {
-  const r = await pool.query(
-    `
-      SELECT id
-      FROM coffee_chain_db.pos_shift_reconciliations
-      WHERE store_id = $1
-        AND status = 'open'
-      ORDER BY started_at DESC
-      LIMIT 1
-    `,
-    [storeId]
-  );
-
-  return r.rows[0] ? Number(r.rows[0].id) : null;
+  try {
+    const r = await pool.query(
+      `
+        SELECT id
+        FROM public.shift_sessions
+        WHERE store_id = $1
+          AND status = 'open'
+        ORDER BY opened_at DESC
+        LIMIT 1
+      `,
+      [storeId]
+    );
+    return r.rows[0] ? Number(r.rows[0].id) : null;
+  } catch {
+    return null;
+  }
 }
 
 async function loadMemberSnapshot(memberId?: number | null) {

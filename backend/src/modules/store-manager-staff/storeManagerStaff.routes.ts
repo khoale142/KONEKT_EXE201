@@ -2,6 +2,7 @@ import { Router } from "express";
 import { authGuard } from "../../middlewares/authGuard";
 import { portalGuard } from "../../middlewares/portalGuard";
 import { roleGuard } from "../../middlewares/roleGuard";
+import { requirePermission, requireStoreAccess } from '../../middlewares/canonicalAuthorizationGuard';
 import {
   createStoreManagerStaffHandler,
   listStoreManagerStaffHandler,
@@ -16,6 +17,7 @@ const router = Router();
 
 router.use(authGuard);
 router.use(portalGuard(["STORE"]));
+router.use(requirePermission('member.manage'), requireStoreAccess((req) => req.user?.storeId));
 
 router.get("/staff", roleGuard(["store_manager"]), listStoreManagerStaffHandler);
 router.post("/staff", roleGuard(["store_manager"]), createStoreManagerStaffHandler);

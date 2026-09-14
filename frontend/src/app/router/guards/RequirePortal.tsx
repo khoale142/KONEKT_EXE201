@@ -17,10 +17,12 @@ export default function RequirePortal({
   if (!hydrated) return null;
   if (!user) return <Navigate to="/" replace />;
 
+  if (user.requireStoreJoin || user.scope === "onboarding") return <Navigate to="/workspace/join-store" replace />;
   const roles = user.roles || [];
   const isSuperuser = roles.some((r) => SUPERUSER_ROLES.includes(r));
+  const isPosEligible = portal === "POS" && ["store_manager", "shift_leader", "staff"].some((r) => roles.includes(r));
 
-  if (user.portal !== portal && !isSuperuser) return <Navigate to="/" replace />;
+  if (user.portal !== portal && !isSuperuser && !isPosEligible) return <Navigate to="/" replace />;
 
   return <RequireAuth>{children}</RequireAuth>;
 }

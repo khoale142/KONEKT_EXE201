@@ -1160,4 +1160,290 @@
     * `owner_hr_requests_page_1789029065682.png` & `owner_hr_requests_final_1789029099195.png`: Màn hình Chủ quán duyệt nhân sự hiển thị modal phân vai trò 3 cấp (`staff`, `shift_leader`, `store_manager`) kèm danh sách quyền hạt nhân rõ ràng.
     * `staff_portal_page_1789029051210.png`: Staff Portal cockpit hiển thị trực quan các nút tác vụ nhanh (Mở POS, Mở Bếp KDS, Kiểm quỹ) và bộ widget chấm công, lịch làm, kiểm kho, bảng lương.
 
+---
 
+### [LOG-037] | 11/09/2026 - TÁI CẤU TRÚC CA BÁN HÀNG POS & ĐỐI SOÁT KÉT TIỀN MULTI-TENANT (PLAN-16)
+* **Người thực hiện**: Antigravity AI Agent (theo chỉ đạo của User).
+* **Tác vụ**:
+  1. **Khắc phục lỗi "Zombie Auto-Open"**:
+     - Loại bỏ hoàn toàn lời gọi ngầm `autoOpenDefaultShiftSession` trong `shiftReconciliation.service.ts` và repo.
+     - Khi chưa có ca nào đang mở, backend trả về `current: null`, cho phép Frontend hiển thị sạch sẽ form "Mở ca bán hàng mới" để thu ngân nhập số tiền lẻ đầu ca trong két.
+  2. **Cách ly dữ liệu đa chi nhánh & đa khách thuê (100% Multi-Tenant Isolation)**:
+     - Bổ sung điều kiện bắt buộc `WHERE tenant_id = $tenantId AND store_id = $storeId` vào toàn bộ câu lệnh SELECT, INSERT, UPDATE của `shiftReconciliation.repo.ts`.
+     - Tuyệt đối bảo vệ dữ liệu két tiền của từng quán/thương hiệu, không để rò rỉ hay can thiệp chéo giữa các Tenant.
+  3. **Mở rộng phân quyền Portal & Vai trò (Role & Portal Permissions)**:
+     - Cập nhật `shiftReconciliation.routes.ts` và `orders.routes.ts`: Cho phép `portalGuard(["POS", "STORE", "OFFICE"])`.
+     - Cập nhật `posOrder.controller.ts` và `orders.controller.ts`: Cho phép nhân viên chi nhánh (`portal: "STORE"` với các vai trò `staff`, `shift_leader`, `store_manager`) và Chủ quán (`owner`) đều được phép truy cập và thực hiện order/chốt ca của cửa hàng được phân công mà không bị chặn `403 Forbidden`.
+     - Cập nhật router guard frontend `RequirePortal.tsx` chấp thuận portal `STORE` vào các route `/pos/*`.
+  4. **Nâng cấp Database Schema & Migration**:
+     - Bổ sung trường `shiftCode: varchar('shift_code', { length: 10 }).default('A').notNull()` vào bảng `shift_sessions` trong `schema.ts`.
+     - Chạy script migration `migrate_plan16_shift_code.ts` thêm cột `shift_code` trên cơ sở dữ liệu Supabase PostgreSQL và đóng các ca mồ côi (0 order).
+  5. **Chuẩn hóa đối soát đóng ca 2 bước & tiếng Việt có dấu**:
+     - Xây dựng hàm chuẩn hóa chuỗi xác nhận `normalizeConfirmText`: Chấp nhận cả chuỗi có dấu `"XÁC NHẬN ĐÓNG CA"` lẫn không dấu `"XAC NHAN DONG CA"`, không phân biệt chữ hoa/thường.
+  6. **Đại tu Giao diện Chốt ca & Màn hình POS (Taste-Skill & KONEKT Aesthetic)**:
+     - `frontend/src/features/pos/pages/PosShiftReconciliationPage.tsx`:
+       * Khi chưa có ca: Form "Mở ca bán hàng mới (Shift Opening)" trang nhã với dải màu KONEKT (xanh rêu `#364D39` & kem ngà `#F4EFEB`), thẻ chọn Ca A/B, phím tắt số dư két nhanh (`0đ`, `200k`, `500k`, `1000k`, `2000k`) và preview định dạng tiền tệ.
+       * Khi có ca mở: Banner ca đang hoạt động với chấm trạng thái phát sáng xanh lá, nút dẫn nhanh 1-tap "Vào Bán Hàng POS", bảng Bento đối soát doanh thu chi tiết.
+       * Khi đóng ca thành công: Tự động reset state, hiển thị alert xanh lá chúc mừng chi tiết, tải lại lịch sử và sẵn sàng ngay lập tức cho ca tiếp theo mà không cần tải lại trang.
+       * Khi xem lại ca lịch sử: Header điều hướng rõ ràng kèm nút "← Quay về ca hiện tại / Mở ca mới".
+     - `frontend/src/features/pos/pages/PosOrderPage.tsx`:
+       * Banner cảnh báo khi chưa mở ca làm việc kèm nút bấm "⚡ Mở ca bán hàng ngay" chuyển hướng mượt mà sang trang chốt ca.
+* **Files tác động**:
+  - `[CHỈNH SỬA]` `backend/src/db/schema.ts`
+  - `[TẠO MỚI]` `backend/src/scripts/migrate_plan16_shift_code.ts`
+  - `[CHỈNH SỬA]` `backend/src/modules/shift-reconciliation/shiftReconciliation.repo.ts`
+  - `[CHỈNH SỬA]` `backend/src/modules/shift-reconciliation/shiftReconciliation.service.ts`
+  - `[CHỈNH SỬA]` `backend/src/modules/shift-reconciliation/shiftReconciliation.controller.ts`
+  - `[CHỈNH SỬA]` `backend/src/modules/shift-reconciliation/shiftReconciliation.routes.ts`
+  - `[CHỈNH SỬA]` `backend/src/modules/orders/orders.routes.ts`
+  - `[CHỈNH SỬA]` `backend/src/modules/pos-orders/posOrder.controller.ts`
+  - `[CHỈNH SỬA]` `backend/src/modules/orders/orders.controller.ts`
+  - `[CHỈNH SỬA]` `backend/src/modules/pos-action-log/posActionLog.service.ts`
+  - `[CHỈNH SỬA]` `frontend/src/app/router/guards/RequirePortal.tsx`
+  - `[CHỈNH SỬA]` `frontend/src/features/pos/pages/PosShiftReconciliationPage.tsx`
+  - `[CHỈNH SỬA]` `frontend/src/features/pos/pages/PosOrderPage.tsx`
+  - `[CHỈNH SỬA]` `docs/Requirements/REQ-16_POS_SHIFT_RECONCILIATION_MULTI_TENANT.md`
+  - `[CHỈNH SỬA]` `docs/Developing/plans/PLAN-16_POS_SHIFT_RECONCILIATION_MULTI_TENANT.md`
+  - `[CHỈNH SỬA]` `docs/Developing/logs/DEV_CHANGELOG.md`
+* **Kết quả Xác minh & Nghiệm thu**:
+  - **Type-Check**:
+    * Backend: `npx tsc --noEmit` hoàn thành với **Exit code 0** (0 lỗi TypeScript).
+    * Frontend: `npx tsc --noEmit` hoàn thành với **Exit code 0** (0 lỗi TypeScript).
+  - **Kiểm thử Thực tế E2E**:
+    * Màn hình POS hiển thị banner chặn tạo đơn khi chưa có ca mở.
+    * Mở ca A với số dư két ban đầu 500.000đ thành công (`shift_sessions.id = 4`).
+    * Bán đơn hàng thực tế `#ORD-KONEKT-260911-4811` tiền mặt 69.000đ ➔ Ca làm việc tự động tăng `total_orders = 1`, `total_sales = 69000.00`, tiền lý thuyết trong két đạt 569.000đ.
+    * Thực hiện quy trình đóng ca 2 bước với kiểm đếm 569.000đ, xác nhận `"XÁC NHẬN ĐÓNG CA"` ➔ Đóng ca thành công, chênh lệch 0đ (Khớp 100% két).
+    * Hệ thống không tự động sinh ca ngầm, `getCurrentShiftReconciliation` trả về `null`, form quay về trạng thái mở ca mới sẵn sàng cho Ca B.
+    * Đã kiểm chứng cách ly Multi-Tenant: Tenant 1 và Tenant 6 hoàn toàn độc lập, không rò rỉ dữ liệu.
+
+---
+
+### [LOG-038] | 11/09/2026 - PHÂN TÍCH LUỒNG MÃ MỜI OWNER VÀ KÍCH HOẠT STAFF, LẬP REQ-15B / PLAN-15B
+
+* **Người thực hiện:** Codex, theo yêu cầu đọc tài liệu, đối chiếu code và lập kế hoạch implement.
+* **Bối cảnh:** Owner chưa thấy mã mời trên trang quản lý, chưa thêm Staff vào Store và chưa kiểm thử được quá trình phân role.
+* **Phạm vi xác minh:** Phân tích tĩnh code local và tài liệu REQ-04/REQ-15/PLAN-15. Chưa gọi API, chưa kiểm tra database live, chưa chạy E2E trong phiên này.
+* **Phát hiện chính:**
+  1. Mã mời hiện có UI ở SelectStorePage nhưng không có ở Owner HR; Store null mã bị ẩn khối mã. registerOwner không sinh mã Store đầu tiên, khác createTenantWorkspace.
+  2. SelectStorePage gọi POST /stores để thêm chi nhánh nhưng router stores chưa có endpoint POST tương ứng.
+  3. Verify/join chưa yêu cầu đăng nhập, request không gắn userId; approval có thể tạo user mới trong Tenant và để lại tài khoản Staff chưa gán. Login findFirst theo email/username không chọn membership xác định.
+  4. /auth/me trả claims hiện tại, refresh ký lại claims cũ; hydrate không giữ đủ email/quyền/onboarding. Kiểm tra trạng thái chưa nhận được kết quả duyệt mới từ DB.
+  5. API duyệt/từ chối chưa kiểm tra Owner, chưa validate role runtime, chưa dùng transaction và chống quyết định đồng thời.
+  6. Directory Owner đọc mô hình user_stores/roles/role_id cũ, khác users/store_id/role enum mà approval ghi vào; scope Store và portal giữa login/switch chưa đồng nhất.
+* **Tài liệu tạo/cập nhật:**
+  - `[TẠO MỚI]` `docs/Requirements/REQ-15B_OWNER_STORE_INVITES_AND_STAFF_ACTIVATION.md`
+  - `[TẠO MỚI]` `docs/Developing/plans/PLAN-15B_OWNER_STORE_INVITES_AND_STAFF_ACTIVATION.md`
+  - `[CẬP NHẬT]` `docs/Requirements/README.md`
+  - `[CẬP NHẬT]` `docs/Developing/plans/README.md`
+  - `[CẬP NHẬT]` `docs/Developing/logs/DEV_CHANGELOG.md`
+* **Quyết định kế hoạch:**
+  - Mã mời đặt ngay trong Owner HR; chỉ Owner duyệt ba role, vị trí ứng tuyển không tự cấp quyền.
+  - Giữ ID/mật khẩu Staff mới; request gắn userId, approval nguyên tử, session cập nhật từ DB và onboarding chưa có quyền business.
+  - Nối directory Owner với users/stores mới; kiểm thử bằng ba tài khoản mới và hai session Owner/Staff độc lập.
+  - Dùng số 15B để bổ sung REQ-15, không chiếm REQ-17 đã được nhắc cho lịch/chấm công. Không mở rộng đợt này sang GPS, lương, VietQR hoặc toàn bộ quyền POS/kho.
+* **Hiện trạng:** Đã lập requirement có 15 AC và plan có 12 phát hiện code, API contract, danh sách file, thứ tự triển khai, kiểm thử và rollback. Chưa triển khai; không sửa mã nguồn, chạy migration hoặc sửa dữ liệu. Các thay đổi PLAN-16 có sẵn trong working tree được giữ nguyên.
+* **Lưu ý kế thừa:** Nhãn Completed và các ảnh giao diện trong log REQ-15 trước đây chưa đủ chứng minh E2E tài khoản mới. Đặc biệt, mô tả approval dùng transaction chưa khớp code được đọc ở phiên này. Nghiệm thu lại theo REQ-15B trước khi kết luận luồng đã hoạt động.
+
+
+
+
+## LOG-039 — 2026-09-11 — PLAN-15B triển khai (đang thực hiện)
+- User đã duyệt PLAN-15B và yêu cầu kiểm tra database mới thực tế.
+- Audit trực tiếp: 6 tenants, 6 stores, 12 users; không thiếu mã mời; 1 request approved chưa có user_id; không trùng email ở nhóm chưa có tenant.
+- Đã thêm audit_staff_onboarding.ts, repair_staff_onboarding.ts (dry-run mặc định, không gộp tài khoản); migration Drizzle 0001 cho partial unique indexes, history indexes, status/role checks và RLS cho 4 bảng nội bộ. Chưa đánh dấu migration đã áp dụng.
+- Backend: konektSession.service.ts dùng cùng resolver cho login/me/refresh/switch; xác thực membership bằng mật khẩu, scope onboarding; authGuard chặn nghiệp vụ cho onboarding; workspaceOwnerGuard kiểm tra Owner trực tiếp DB.
+- staffOnboarding.service.ts + workspace.schema.ts: yêu cầu gắn userId, khóa applicant trước request, duyệt trong transaction trên cùng tài khoản, role enum 3 giá trị; API stores/invite/staff/status; storeInvite.service.ts dùng crypto và khóa bản ghi.
+- Bảo toàn thay đổi PLAN-16 đang có trong workspace. Tiếp tục UI, migration thực tế và kiểm thử.
+
+
+## LOG-040 — 12/09/2026 — PLAN-15B: code/database triển khai, API đạt; chờ browser
+- Requirement/plan: [REQ-15B](../../Requirements/REQ-15B_OWNER_STORE_INVITES_AND_STAFF_ACTIVATION.md), [PLAN-15B](../plans/PLAN-15B_OWNER_STORE_INVITES_AND_STAFF_ACTIVATION.md). [Bằng chứng chi tiết](VERIFY-15B_STAFF_ONBOARDING.md).
+- Database: áp dụng Drizzle 0001_staff_onboarding_integrity.sql và journal/meta; thêm partial unique users unassigned/request pending, indexes lịch sử/tenant-status, check status/role, RLS + revoke Data API cho 4 bảng backend-only. Audit sau cleanup trở lại 6 tenants / 6 stores / 12 users / 1 request. Không thay mã cũ, không còn constraint fault injection.
+- Dữ liệu legacy: request 1 approved thiếu userId, candidate IDs 11/12. repair script chỉ tạo manifest và cấp mã thiếu khi --apply; không sửa danh tính mơ hồ.
+- Backend: authGuard, workspaceOwnerGuard, jwt, auth.controller/routes, konektAuth.service, konektSession.service, workspace.controller/routes/service/types, workspace.schema, staffOnboarding.service, storeInvite.service và schema.ts. Cùng resolver login/me/refresh/activation/switch; nguồn KONEKT và scope onboarding; kiểm tra tài khoản/store từ DB; Owner-only approval; membership chỉ được cấp khi chứng minh credential; transaction duyệt giữ đúng userId/password. Đăng ký Owner và tạo Store có mã nguyên tử. Loại fallback demo sang tài khoản thật bất kỳ.
+- Frontend: auth.store, axios, router + RequireAuth/RequireStoreRole/RequirePortal, workspace.api, OwnerHRHub, StaffJoinRequests, StoreInvitePanel mới, OwnerStaffDirectoryPage mới, StaffJoinStore, SelectStore/SelectTenant, OfficeWorkspaceLayout/WorkspaceSwitcher. Mã mời ở HR; role preset mặc định Staff; directory đúng schema; trạng thái chờ/rejected/error/poll+activation; guards; badge theo tenant. Bỏ form guest trùng trong SelectTenant.
+- Tests: hai lượt ba role mới PASS; lượt focused PASS gồm rollback ở bước ghi request, chống membership cùng email khác credential, Customer sub collision và disable account. Script dùng --files để nạp Express augmentation, fixture prefix + ID allowlist, dọn sau chạy.
+- Build backend/frontend đã pass trong quá trình kiểm tra; build cuối và kiểm tra diff cập nhật ở mục hoàn tất bên dưới. Vite còn cảnh báo bundle lớn và import động auth.store để tránh vòng phụ thuộc khi refresh.
+- Browser: skill/runtime được khởi tạo nhưng không có browser (list trả []); chưa xác nhận click/copy/F5/mobile/hai phiên, không có ảnh và không đánh E2E UI passed.
+- Docs: thêm VERIFY-15B; cập nhật REQ/PLAN15B, liên kết nghiệm thu lại REQ/PLAN15, ROLES_AND_PERMISSIONS, indexes tài liệu. Giữ các thay đổi PLAN-16 từ trước.
+
+
+### LOG-040 — Hoàn tất kiểm tra bàn giao
+- Backend npm.cmd run build: PASS. Frontend npm.cmd run build: PASS (Vite 3196 modules); tsc --noEmit sau chỉnh guard cuối: PASS.
+- git diff --check trên các file thuộc 15B: PASS. Diff toàn workspace có trailing whitespace sẵn ở shiftReconciliation.repo.ts thuộc PLAN-16; không sửa lẫn tác vụ.
+- Audit DB cuối: baseline dữ liệu giữ nguyên; journal 0001 hiện diện; đủ 4 index mới; RLS bật; publicGrantCount = 0; testConstraints = [].
+- Liên kết nội bộ trong REQ/PLAN/VERIFY-15B: PASS. Chưa commit/push. Trạng thái bàn giao: code và migration đã triển khai, API/database đã kiểm thử; còn browser verification.
+
+---
+
+### LOG-041 — 12/09/2026 — REQ-17 / PLAN-17: Canonical Account Membership Foundation (Phase 1)
+- Thêm model additive: `tenants.join_code`, `tenants.created_by`, `tenant_memberships`, `membership_store_access`, `permissions`, `role_permissions`, `membership_permission_overrides`, `tenant_join_requests` và `employment_profiles` trong Drizzle schema.
+- Thêm migration custom `0002_canonical_membership_foundation.sql`: enums canonical `owner/manager/leader/staff`; FK/unique/index/check; RLS + revoke Data API cho các bảng backend-only; constraint trigger chặn membership Tenant A gán Store Tenant B. Không drop/rename bảng hoặc cột legacy.
+- Không sửa auth/login/JWT/frontend/workspace/POS/HR/payroll/attendance. `users.tenant_id`, `users.store_id`, `users.role`, `users.custom_permissions`, `role_id`, `user_stores`, Store invite và onboarding legacy được giữ nguyên.
+- Thêm `audit_canonical_memberships`, `backfill_canonical_memberships --apply` và `test_canonical_memberships`. Audit chỉ tự nhận nhóm duplicate có email chuẩn hóa, password hash, tên và số điện thoại tương thích; canonical account là ID nhỏ nhất; conflict/unknown role/custom permission được báo cáo, không đoán hoặc xóa User legacy.
+- Drizzle full diff đầu tiên bị loại vì cố đưa DDL lịch sử ngoài Phase 1 vào 0002; custom migration được tạo lại theo PLAN-17. `npm.cmd run build` và static migration check PASS. Remote DB audit/fixture/migration apply pending vì connection không phản hồi và không có quyền apply remote migration.
+
+---
+
+### LOG-042 — 12/09/2026 — REQ-17 / PLAN-17 Phase 1 review fixes
+- Revised unpublished migration `0002`: `membership_store_access` now carries `tenant_id` and uses two composite foreign keys. The unpublished trigger/function design was removed.
+- Audit/backfill now includes singleton Accounts, requires every duplicate candidate to carry the same non-empty stored hash, reconciles `users.role` with `role_id -> roles.name`, reports invalid `user_stores`, and skips existing canonical-state mismatches.
+- Added join-request state checks, expanded fixture/catalog coverage, and rebuilt `0002_snapshot.json`; follow-up `drizzle-kit generate` reports no schema changes.
+- `npx tsc --noEmit` passes. PostgreSQL replay/fixture/catalog execution remains pending: a local PostgreSQL service is not project-configured or identified as disposable, and the configured remote Supabase pooler is not confirmed as non-production. No Phase 2 runtime behavior was changed.
+
+---
+
+### LOG-043 — 13/09/2026 — REQ-17 / PLAN-17 remaining review remediation
+- Fixed nullable integer parsing in `audit_canonical_memberships.ts`: SQL `NULL`, `undefined`, and blank query values remain `null`; only safe integer numbers or numeric strings are accepted. This preserves global Accounts, absent legacy Store links, and an absent `role_id` source without introducing synthetic ID `0` values.
+- Backfill reporting now distinguishes a verified equivalent canonical membership from an existing mismatch. Mismatches increment `mismatchedMemberships`, are reported, and continue to receive no Store access mutation.
+- Extended `test_canonical_memberships.ts` with a no-database `--unit` mode (19 assertions) and fixture coverage for a Tenant member with no Store and no `role_id`. The fixture still requires an explicitly approved disposable/development database.
+- Validation: backend `tsc --noEmit`, unit mode, backend build, and the scoped Phase 1 whitespace check passed. Repository-wide `git diff --check` still reports pre-existing trailing whitespace in PLAN-16 `shiftReconciliation.repo.ts`, outside this change. PostgreSQL migration/audit/backfill/fixture execution remains pending because no confirmed safe database is available. No schema, migration, auth/JWT, frontend, POS, HR, or Phase 2 runtime behavior changed.
+
+---
+
+### LOG-044 — 13/09/2026 — REQ-17 / PLAN-17 database-validation safety preflight
+- Performed read-only discovery against the configured Supabase pooler without exposing credentials or application rows. The endpoint is a pooled Supabase PostgreSQL 17.6 connection for project ref `mileihhepmhrkqzsjjex`; the repository has no local Supabase branch configuration or installed Supabase CLI/MCP database operation available to create an isolated validation target.
+- Actual catalog is post-0001: Drizzle has two migration records; PLAN-15B indexes and RLS are present on legacy backend tables. Phase 1 objects (`tenants.join_code`, `tenants.created_by`, canonical enums, and the seven canonical tables) are absent, so `0002` has not been applied.
+- The target contains existing application data (aggregate counts: 6 tenants, 6 stores, 13 users, 7 orders) and is not explicitly identified as a development, preview, or disposable branch. Classified as UNKNOWN and unsafe for validation writes.
+- No migration, fixture, audit/backfill write, test data, source code, schema, or runtime behavior was changed. Phase 1 database validation remains blocked pending an explicitly confirmed isolated development/preview database.
+
+---
+
+### LOG-045 — 13/09/2026 — REQ-17 / PLAN-17 preview-branch discovery blocked
+- Downloaded the official Supabase CLI transiently and confirmed it supports `branches list` and `branches create`, including a no-data branch path (absence of `--with-data`).
+- The CLI cannot list project `mileihhepmhrkqzsjjex` because no Supabase Management API access token is configured in this agent session; no `SUPABASE_*` environment variable is present. Without authenticated branch metadata, the agent cannot prove permissions, identify main, or create an isolated branch safely.
+- No branch/project/database resource was created or modified. The data-bearing pooler target remains untouched. Resume requires the user to authenticate the official CLI or provide an authenticated Supabase MCP connection, then repeat read-only branch discovery before any write.
+
+---
+
+### LOG-046 — 13/09/2026 — REQ-17 / PLAN-17 preview branch entitlement result
+- Authenticated Supabase Management API discovery succeeded: project `mileihhepmhrkqzsjjex` is active/healthy in `ap-northeast-2`, and no existing preview branches were listed.
+- Attempted exactly one official CLI creation of ephemeral `phase1-canonical-validation` without `--with-data`. Supabase rejected the request with HTTP 402 `entitlement_required`: Branching is available only on Pro plans or above for this organization.
+- No preview branch, project, migration, fixture, audit/backfill write, or main database change occurred. Per validation safety rules, stopped without falling back to the data-bearing primary database.
+
+### LOG-047 — 13/09/2026 — REQ-17 / PLAN-17 local Supabase validation readiness
+- Performed local, read-only readiness discovery after preview branching was rejected. The repository has no `supabase/config.toml` or `supabase/migrations`; its untracked `supabase/.temp/linked-project.json` is link metadata only and was not changed. `backend/drizzle` (0000, 0001, 0002) and `backend/src/db/migrate.ts` remain the application migration authority.
+- No Docker-compatible runtime command is available: `docker`, `podman`, `nerdctl`, and `colima` are absent. No existing local Supabase containers could therefore be inspected or started; no default local Supabase ports 54321–54332 were listening.
+- The official CLI executable is reachable through `npx.cmd`, but the no-install version command did not complete during the bounded readiness check; no CLI command that could create, link, start, reset, or alter any local/remote resource was executed successfully.
+- Per the explicit stop rule, no local initialization, stack start/reset, Drizzle migration, catalog/FK/RLS test, fixture, audit, backfill, drift check, or cloud database action was performed. Phase 1 PostgreSQL validation remains blocked until Docker Desktop (or a compatible local Docker runtime) is installed and running.
+
+### LOG-048 — 13/09/2026 — REQ-17 / PLAN-17 dedicated validation-project handoff blocked
+- Reviewed the next final-database-validation instruction and its required Supabase/AI workflow. The stated validation-project field is still the literal placeholder `<PASTE_NEW_VALIDATION_PROJECT_REF_HERE>` / `<NEW_REF>`, not a project reference.
+- The explicit project-identity safety gate cannot establish that a target exists, differs from main `mileihhepmhrkqzsjjex`, is healthy, or is disposable. No Supabase CLI discovery, credential lookup, repository linking, migration, fixture, audit, backfill, drift operation, or cloud-database query/write was run.
+- Resume requires the actual 20-character validation project ref. It should be supplied as the reference only; no database password, access token, service-role key, or connection URL is needed in chat. The validation task remains blocked with main protected.
+
+### LOG-049 — 13/09/2026 — REQ-17 / PLAN-17 validation ref still unresolved
+- Re-read the supplied validation handoff with the required Supabase and Postgres safety guidance. Its validation target remains a literal escaped placeholder `\<REF_MỚI_CỦA_konekt-phase1-validation>` rather than a real Supabase project ref.
+- Stopped before Management API discovery so a placeholder cannot accidentally be interpreted as a project target. No source, schema, migration, environment file, cloud resource, database record, or main-project state was changed.
+- Awaiting only the real validation project reference; credentials must remain out of chat. Main project protection and the approved Phase 1-only scope remain in force.
+
+### LOG-050 — 13/09/2026 — REQ-18 / PLAN-18 Phase 2 auth and workspace planning
+- User accepted the Phase 1 canonical foundation for continued development and requested Phase 2: Unified Authentication + Workspace Context. Read AI rules, REQ-17, PLAN-17, recent logs, Supabase/Postgres skills, and only the directly relevant auth, JWT, workspace, selector, and session-hydration code.
+- Created REQ-18 and PLAN-18. The plan makes `tenant_memberships` and `membership_store_access` authoritative for the new KONEKT login/session/switch path, requires active context `{ accountId, tenantId, membershipId, storeId? }`, and retains an isolated single-Tenant legacy fallback.
+- The plan excludes Phase 3 join/create redesign, HR/payroll, permission engine, POS/business redesign, legacy removal, and schema/migration edits. It also requires a read-only database identity/migration preflight before any use of the existing additive 0002 runner.
+- No runtime source, schema, migration, database, environment file, or cloud resource was changed. Awaiting explicit approval of PLAN-18 before implementation.
+
+### LOG-051 — 13/09/2026 — REQ-18 / PLAN-18 Phase 2 implementation
+- Added canonical KONEKT session resolution in `canonicalWorkspaceSession.service.ts`. It authenticates one global `users` Account, loads active `tenant_memberships`, derives Store access from `store_access_scope` and `membership_store_access`, and signs canonical claims `{ accountId, tenantId, membershipId, storeId? }`. Membership, Tenant, Store, inactive Account, suspended membership/Tenant, and cross-account attempts are checked server-side before a token is issued.
+- `login-konekt`, refresh, `/auth/me`, `authGuard`, and `/workspace/tenants` + `/workspace/select-tenant` now select the canonical path only when canonical membership records exist. The legacy resolver is kept solely for verified login identities with no canonical record; an Account with suspended canonical membership is rejected rather than falling back to legacy authority.
+- Updated frontend session types, login redirect, hydration payload support, Tenant/Store selector, and workspace switcher to carry `membershipId` and replace session tokens atomically after a validated activation. No Phase 3 creation/join redesign, HR/payroll, POS authorization, permission engine, legacy table/column removal, schema, or migration SQL was changed.
+- Added `test:canonical-workspace-session` (8 unit checks) and verified backend TypeScript/build, frontend TypeScript/build, and `drizzle-kit check`. The frontend build retains its existing dynamic-import/chunk-size warnings only.
+- Safety gate: `backend/.env` resolves to the existing Supabase pooler already classified as the data-bearing main project. No 0002 migration, fixture, audit, backfill, reset/drop, or other database write ran. Two attempted local shell wrappers failed before a read-only query could execute, so no additional SQL was sent. Live canonical database verification remains blocked pending a positively confirmed development target.
+
+---
+
+### LOG-052 — 13/09/2026 — REQ-18 / PLAN-18 development rollout stopped after migration
+- The user explicitly accepted the configured Supabase database as the development target. Read-only preflight found 2 Drizzle migration records (`0000`, `0001`), no Phase 1 canonical tables, and aggregate legacy data of 6 Tenants, 6 Stores, and 13 Users.
+- Ran the normal Drizzle migration runner exactly once. It applied the existing additive `0002_canonical_membership_foundation.sql` successfully; no reset, drop, truncate, legacy-data deletion, migration edit, fixture, or Phase 3 work occurred.
+- The immediately following read-only PostgreSQL catalog query stopped with `self-signed certificate in certificate chain`. Per the rollout stop rule, the canonical audit, both backfill passes, canonical row verification, and further database actions were not run.
+
+---
+
+### LOG-053 — 13/09/2026 — REQ-18 / PLAN-18 development rollout completed
+- Resumed after the post-migration TLS validation failure without re-running or editing `0002`. The temporary `pg` client was replaced by the project `src/db/index.ts` connection path used by backend scripts. It retains TLS for the Supabase pooler and uses the repository's established self-signed-certificate compatibility setting; no TLS-off connection was used.
+- Read-only catalog verification succeeded: Drizzle migration count is 3, and `tenant_memberships` plus `membership_store_access` exist before backfill. The canonical audit found 13 legacy Users, 9 eligible identity groups, 2 conservative identity conflicts, no role reconciliation conflict, and no invalid legacy Store link/assignment.
+- Backfill pass 1 created 7 memberships and 3 Store-access rows; it created no employment profiles and did not alter legacy Users. The two identity-conflict groups were not auto-merged; an Account with custom permissions was recorded as not mapped to the Phase 1 permission model. Pass 2 created 0 memberships and 0 Store-access rows, and found 7 equivalent memberships, proving idempotency.
+- Final read-only summary: 7 memberships (4 owner/all, 1 manager/selected, 2 staff/selected), 3 Store-access rows, and 0 cross-Tenant Store-access rows.
+- Verification: canonical workspace-session unit checks PASS (8); canonical-memberships unit checks PASS (19); backend build PASS; frontend build PASS. Frontend retains existing Vite dynamic-import and large-chunk warnings only. No migration/schema file, reset/drop/truncate/delete, destructive fixture, or Phase 3 work was performed.
+
+---
+
+### LOG-054 — 13/09/2026 — REQ-19 / PLAN-19 Phase 3 canonical Tenant lifecycle
+- Added `canonicalTenantLifecycle.service.ts` and canonical workspace endpoints for Account-driven Tenant creation, reusable join-code requests, Owner list/approve/reject, and applicant cancellation. Creation transactionally writes Tenant, first Store, `created_by` audit actor, and active Owner `tenant_membership` with `all` scope. Ownership is never derived from `created_by`.
+- Approval accepts only canonical `staff`, `leader`, or `manager`, locks the pending request, validates active same-Tenant Store IDs, activates/upserts membership, writes selected Store access, and completes request review atomically. The pending unique index and composite Store-access FKs continue to enforce duplicate/cross-Tenant protection; no Owner assignment or automatic identity merge exists.
+- Added Tenant join-code and Owner request-management frontend routes plus canonical API client calls. Legacy Store onboarding remains available at its previous route for compatibility. No migration, schema, HR/payroll, permission-engine, reset/drop/truncate/delete, or Phase 4 change was made.
+- Verification: backend TypeScript/build PASS; frontend TypeScript/Vite build PASS. Existing dynamic-import and large-chunk Vite warnings remain. Live database mutations were not required or run for this source implementation.
+
+---
+
+### LOG-055 — 13/09/2026 — REQ-20 / PLAN-20 Phase 4 canonical authorization
+- Added additive, idempotent migration `0003_canonical_permission_defaults.sql` and applied it through the normal Drizzle runner to the approved development database. It seeds only `tenant.manage`, `store.manage`, `member.manage`, and `pos.access`, with minimal Owner/Manager/Leader/Staff role defaults; no reset, drop, truncate, or delete occurred.
+- Added central canonical authorization resolution and composable permission/Store guards. It revalidates Account → active Membership → Tenant → active Store from the database, resolves override allow/deny before role defaults, and requires explicit `membership_store_access` for selected scope. Owner critical Tenant/Store/member administration remains protected from a deny override.
+- Applied canonical permission coverage to canonical Tenant join/member review and workspace Store/member administration. The main POS orders router requires `pos.access` and validates its active canonical Store scope; legacy sessions retain their existing guards during staged migration.
+- Added four focused authorization assertions (role default, allow override, deny override, protected Owner) and passed backend build plus frontend build. Existing Vite dynamic-import/large-chunk warnings remain. No Phase 5 work was started.
+
+---
+
+### LOG-056 — 13/09/2026 — REQ-21 / PLAN-21 Phase 5 membership-scoped employment
+- Added canonical employment service and workspace endpoints. Self employment read resolves only the active Account membership. Member employment read/upsert is guarded by Phase 4 `member.manage` and verifies requested membership belongs to the active canonical Tenant before accessing the 1:1 `employment_profiles` row.
+- Employment writes use `employment_profiles.membership_id` with `onConflictDoUpdate`; the same Account can therefore carry distinct employment records in different Tenants. No global User employment field is changed or deleted, and no identity merge occurs.
+- Existing attendance, shift, payroll, and non-migrated staff workflows retain legacy compatibility; new canonical HR consumers receive membership and Tenant context. Backend build and frontend build PASS; existing Vite warnings remain. No Phase 6 work started.
+
+### LOG-057 — 13/09/2026 — REQ-21 Phase 5 focused runtime completion
+- Applied canonical authorization to active payroll, Store-manager staff, and attendance/schedule routers. Canonical sessions require effective permission and active Store access from their membership; Store-specific payroll additionally resolves the route Store against the membership Tenant. Legacy sessions continue using prior role guards.
+- The canonical employment API remains the membership-scoped profile path. Legacy attendance/schedule/payout record schemas still carry historical User IDs and are retained for compatibility; they are now only reachable by canonical sessions whose active membership and Store are verified.
+- Verification: canonical authorization test PASS (4), backend build PASS, frontend build PASS. Existing Vite chunk/import warnings remain. No destructive database operation or Phase 6 change occurred.
+
+### LOG-058 — 13/09/2026 — REQ-21 final workforce identity pass
+- Read-only catalog discovery found that the approved development database has `shift_sessions` (`tenant_id`, `store_id`, `user_id`) as its only active workforce record table. The backend-referenced `staff_attendance`, `staff_schedules`, `schedule_requests`, and `pr_payroll_records` tables are absent; no guessed/placeholder DDL was applied for them.
+- Applied additive Drizzle migration `0004_membership_scoped_workforce_identity.sql` to `shift_sessions`: nullable `membership_id` FK to `tenant_memberships`, membership/time index, conservative historical backfill by exact `user_id + tenant_id`, and a compatibility trigger that assigns only one proven membership. `user_id` remains intact. No reset, drop, truncate, or delete was performed.
+- Final audit: 5 existing shift rows; 2 mapped, 3 unmapped and retained as `NULL`, 0 invalid membership/Tenant pair. The focused transaction test verified both an explicit canonical membership write and a legacy-shaped write, then rolled the fixture back.
+- POS shift reconciliation now resolves the active canonical membership server-side before insert, writes `membership_id`, exposes it on shift reads when present, and requires canonical `pos.access` plus validated Store access. Tenant/Store context no longer defaults to ID 1.
+- Verification: `test:workforce-membership-identity`, canonical authorization (4), canonical workspace session (8), backend `tsc` build, and frontend `tsc && vite build` PASS. Existing Vite warnings remain. Phase 5 cannot be declared complete until the actual attendance/schedule/payroll tables are deployed or the legacy runtime is pointed at its real schema; no Phase 6 work started.
+
+### LOG-059 — 13/09/2026 — REQ-22 / PLAN-22 Phase 6 legacy runtime deprecation
+- Read-only database audit confirmed that only `users` and membership-scoped `shift_sessions` exist among the inspected legacy workforce/identity tables. `roles`, `user_stores`, `staff_attendance`, `staff_schedules`, `schedule_requests`, and `pr_payroll_records` are absent. No missing table was created and no legacy column/table or historical shift row was modified.
+- Retired `migrate:payroll`, `migrate:schedule-timestamps`, and `backfill:schedule-change-notifications` commands so absent-table SQL cannot be accidentally invoked from package scripts. The source scripts are left as historical artifacts rather than being deleted.
+- Retained active compatibility paths: demo login, legacy portal login/password reset, staff registration and Store-invite onboarding, Store Manager APIs, and attendance/schedule/payroll routes because the shipped frontend still calls them. Their dependency on absent database tables is explicitly documented as a follow-up schema/runtime alignment concern, not hidden by synthetic tables.
+- Verification: canonical workspace session test (8), canonical authorization test (4), workforce membership identity rollback test, backend build, and frontend build PASS. Static search finds no retired package command. No destructive database action or Phase 7 work occurred.
+
+---
+
+### LOG-060 — 13/09/2026 — REQ-23 / PLAN-23 canonical Account onboarding integration
+- Added canonical `account` scope to the JWT, canonical session service, refresh, `/auth/me`, and request guard. These claims carry only Account identity and are restricted to account/workspace-onboarding routes; they cannot establish a Tenant, Store, membership, POS, HR, or business-operation context. The guard also allows an account-only caller to cancel only its own canonical Tenant join request.
+- Added the generic `/auth/register-account` flow. It creates one active global `users` Account without a Tenant, Store, or membership, then returns an account-only canonical session. A credential resolving to exactly one global Account without active membership now receives that same scope on login. Existing role-specific registration APIs remain for compatibility but their frontend routes redirect to the generic page.
+- The canonical Workspace Hub now routes create/join actions through canonical Tenant lifecycle endpoints; Tenant joining explicitly accepts `KON-...` codes. It lists pending canonical Tenant requests without fabricating a Store, exposes an Owner-only Tenant member invite code with copy/review actions, and lets an approved applicant see the new membership after a refresh.
+- Verification passed: canonical workspace-session checks (14, including no membership/Tenant/Store context on account claims), canonical authorization checks (4), backend TypeScript build, and frontend TypeScript/Vite build. The normal existing Vite dynamic-import/chunk-size warnings may still appear. No migration, DB schema/data operation, permission-engine change, or architecture phase was started.
+
+---
+
+### LOG-061 — 14/09/2026 — REQ-24 / PLAN-24 canonical Store-invite onboarding
+- Applied additive Drizzle migration `0005_canonical_store_invite_requests` to the configured development database. It adds nullable `tenant_join_requests.requested_store_id`, a Store FK, and a lookup index. Historic Tenant-code request rows remain valid with `NULL`; no existing records, legacy columns, or `tenants.join_code` data was deleted.
+- Canonical employee requests now resolve the active `KN-...` Store invite code server-side to one Store and Tenant, then persist the requested Store with the canonical Tenant request. The primary frontend flow verifies and displays the Store/business before submission; it never asks an applicant to choose a role or trusts a client Tenant/Store identifier.
+- Owner approval remains limited to STAFF, LEADER, and MANAGER. It creates or activates one selected-scope TenantMembership and inserts every selected `membership_store_access` row. Added the canonical Owner-only membership Store-access update endpoint so Store access can later be added or removed without another Account or TenantMembership; OWNER remains `all` scope.
+- Removed `KON-...` Tenant-code language and display from the primary employee Workspace flow, retained the per-Store invite panel and legacy compatibility endpoint, and surfaced the requested Store in Owner review.
+- Verification passed: `0005` migration runner, Store-invite transaction test with rollback, canonical authorization test (4), canonical workspace-session test (14), backend TypeScript build, and frontend TypeScript/Vite build. Existing Vite dynamic-import and chunk-size warnings remain.
+
+---
+
+### LOG-062 — 14/09/2026 — direct Store-invite onboarding correction
+- Corrected the primary Store-code path: an authenticated canonical Account with no workspace can now verify and redeem a Store invite. Redeeming the active code transactionally resolves the database-owned Store/Tenant, creates one active selected-scope STAFF membership only when needed, and writes the invited Store access idempotently.
+- Existing memberships are preserved: selected memberships gain the newly invited Store without changing role; OWNER `all` scope requires no selected-access row. Invalid/disabled codes fail and no client-provided Tenant, Store, role, or membership identifier is used.
+- The direct redemption response now issues an active Store workspace session. The employee page uses Store-only wording and enters POS after success. The Owner Store invite panel keeps one code per Store and explains the immediate STAFF result. Tenant request/approval routes remain compatibility-only.
+
+---
+
+### LOG-063 — 14/09/2026 — REQ-24 pending Store-invite onboarding correction
+- Replaced the incorrect primary direct-redemption behavior. A valid `KN-...` Store code is still resolved server-side to its Store and Tenant, but it now writes only one canonical `tenant_join_requests` row in `pending` status with `requested_store_id`. It does not create/activate a TenantMembership, create Store access, issue a workspace session, or redirect the applicant to POS.
+- Account-scope sessions may verify a Store code, submit the request, and reload their own pending state through the canonical workspace list. The employee UI shows the business, invited Store, “Yêu cầu tham gia đã được gửi”, and “Đang chờ chủ doanh nghiệp duyệt”; it keeps the existing Account session while pending.
+- Owner review continues through the canonical permission-protected endpoint and now performs its Owner check inside the approval transaction. Approval accepts only STAFF, LEADER, or MANAGER; it locks the pending request, validates every selected active Store belongs to the Tenant, upserts exactly one active selected-scope membership, replaces stale selected Store access with the Owner-selected set, and marks the request approved atomically. OWNER and cross-Tenant Store assignment are rejected.
+- The focused rollback test now covers pending-only submission, duplicate-pending safety, denied pending Store access, Owner review visibility, STAFF one-Store approval, applicant refresh, MANAGER two-Store approval, OWNER rejection, and cross-Tenant rejection. Passed: focused Store-invite test, canonical authorization (4), canonical workspace session (14), backend TypeScript build, frontend TypeScript/Vite build, and `git diff --check`. The test fixture rolls back; no migration/schema/data change was applied. No new architecture phase or unrelated module redesign was started.
+
+---
+
+### LOG-064 — 14/09/2026 — REQ-24 canonical review integrated into Owner HR
+- Diagnosed a real pending Store-invite request in the development database: it was correctly present in `tenant_join_requests` for its Tenant and invited Store, with no applicant membership. The active canonical Owner membership for that Tenant also exists. The request did not appear because the primary Owner HR Requests tab queried only legacy `/workspace/staff-requests`, while canonical Store-invite requests use `/workspace/tenant-join-requests`.
+- Reused the existing canonical review page as `CanonicalTenantJoinRequestsPanel` and rendered it inside the current Owner HR Requests tab, above the retained legacy request panel. The panel shows invited Store, supports per-request STAFF/LEADER/MANAGER selection and one-or-more Store checkboxes, and invokes only canonical approval/rejection APIs. The Owner HR badge now sums canonical and legacy pending requests.
+- Retained compatibility for an Owner holding a valid legacy KONEKT session during rollout. Canonical review handlers derive Account/Tenant only from the validated server session and the lifecycle service still requires an active canonical Owner membership from the database before list, approve, reject, or Store-access changes; client role/Tenant input is never trusted.
+- Added AI Rule 11, Integration-First: existing modules/pages/APIs must be assessed and extended before new parallel pages/routes are created, and a primary UI must expose the new feature. Verification passed: backend TypeScript build, frontend TypeScript/Vite build, focused canonical Store-invite rollback test, canonical authorization test (4), and `git diff --check`. No migration, schema/data mutation, destructive deletion, or new architecture phase was performed.

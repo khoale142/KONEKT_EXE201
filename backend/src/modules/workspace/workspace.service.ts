@@ -1,4 +1,5 @@
-import bcrypt from "bcrypt";
+import { generateStoreInviteCode } from './storeInvite.service';
+import { issueKonektSession, provenMemberships } from '../auth/konektSession.service';
 import { eq, and, desc } from "drizzle-orm";
 import { db } from "../../db";
 import {
@@ -11,7 +12,7 @@ import {
   productVariants,
 } from "../../db/schema";
 import { ApiError } from "../../utils/apiError";
-import { signAccessToken, signRefreshToken, AccessClaims, Portal } from "../../utils/jwt";
+import { AccessClaims } from "../../utils/jwt";
 import { getDefaultPermissionsForRole } from "./workspace.types";
 
 function slugify(text: string): string {
@@ -38,23 +39,11 @@ function generateTenantCode(name: string): string {
   return `${letters}${num}`;
 }
 
-export function generateStoreInviteCode(storeId: number, tenantCode?: string): string {
-  const prefix = tenantCode ? tenantCode.slice(0, 4).toUpperCase() : "STR";
-  const rand = Math.random().toString(36).substring(2, 6).toUpperCase();
-  return `${prefix}-${storeId}-${rand}`;
-}
-
 /**
  * 1. Lấy tất cả các Tenant & Store mà tài khoản thuộc về (Multi-tenant)
  */
-export async function getUserWorkspaces(email: string) {
-  const emailNorm = email.trim().toLowerCase();
-
-  // Tìm tất cả các record của email này trong bảng users
-  const userMemberships = await db.query.users.findMany({
-    where: eq(users.email, emailNorm),
-  });
-
+export async function getUserWorkspaces(claims: AccessClaims) {
+  const userMemberships = await provenMemberships(claims);
   const tenantList = [];
 
   for (const m of userMemberships) {
@@ -63,7 +52,7 @@ export async function getUserWorkspaces(email: string) {
     const tenant = await db.query.tenants.findFirst({
       where: eq(tenants.id, m.tenantId),
     });
-    if (!tenant) continue;
+    if (!tenant || tenant.status === 'suspended') continue;
 
     // Lấy danh sách stores
     const tenantStores = await db.query.stores.findMany({
@@ -74,16 +63,17 @@ export async function getUserWorkspaces(email: string) {
     // Nếu là owner hoặc platform_admin -> thấy tất cả stores
     // Nếu là manager/staff -> thấy store được gán (hoặc tất cả nếu chưa gán)
     let accessibleStores = tenantStores;
-    if (m.role === "staff" && m.storeId) {
+    if (!["owner", "platform_admin"].includes(m.role)) {
       accessibleStores = tenantStores.filter((s) => s.id === m.storeId);
     }
 
     // Đảm bảo permissions hợp lệ
-    let permissions = (m.customPermissions as string[]) || [];
-    if (!permissions || permissions.length === 0) {
+    let permissions = (m.customPermissions as string[]) ?? [];
+    if (m.customPermissions == null) {
       permissions = getDefaultPermissionsForRole(m.role);
     }
 
+    if (!['owner', 'platform_admin'].includes(m.role)) permissions = permissions.filter(p => p !== 'can_invite_staff');
     tenantList.push({
       tenantId: tenant.id,
       tenantName: tenant.name,
@@ -100,7 +90,7 @@ export async function getUserWorkspaces(email: string) {
         name: s.name,
         address: s.address,
         phone: s.phone,
-        inviteCode: s.inviteCode,
+        inviteCode: ["owner", "platform_admin"].includes(m.role) ? s.inviteCode : undefined,
         isActive: s.isActive,
       })),
     });
@@ -109,7 +99,7 @@ export async function getUserWorkspaces(email: string) {
   // Lấy các yêu cầu gia nhập đang chờ duyệt của email này
   const pendingRequests = await db.query.storeJoinRequests.findMany({
     where: and(
-      eq(storeJoinRequests.email, emailNorm),
+      eq(storeJoinRequests.userId, Number(claims.sub)),
       eq(storeJoinRequests.status, "pending")
     ),
     orderBy: [desc(storeJoinRequests.createdAt)],
@@ -143,22 +133,24 @@ export async function getUserWorkspaces(email: string) {
  * 2. Tạo Tenant mới (Khởi tạo chuỗi mới cho Owner)
  */
 export async function createTenantWorkspace(
-  email: string,
+  identity: AccessClaims,
   params: { brandName: string; address?: string; phone?: string; fullName?: string }
 ) {
-  const emailNorm = email.trim().toLowerCase();
+  const actorId = Number(identity.sub);
   const brandName = params.brandName.trim();
   if (!brandName) throw new ApiError(400, "Vui lòng nhập tên thương hiệu / quán");
 
   // Tìm thông tin người dùng từ bản ghi cũ (để lấy mật khẩu, tên)
   const existingUser = await db.query.users.findFirst({
-    where: eq(users.email, emailNorm),
+    where: eq(users.id, actorId),
   });
 
+  if (!existingUser?.isActive || !['owner', 'platform_admin'].includes(existingUser.role)) throw new ApiError(403, 'Chỉ Chủ quán được tạo thương hiệu');
+  const emailNorm = existingUser.email;
   const fullName = params.fullName?.trim() || existingUser?.fullName || "Chủ quán";
   const phone = params.phone?.trim() || existingUser?.phone || "";
   const passwordHash =
-    existingUser?.passwordHash || (await bcrypt.hash("owner123", 10));
+    existingUser.passwordHash;
 
   // Tạo slug & code duy nhất
   const baseSlug = slugify(brandName);
@@ -271,419 +263,18 @@ export async function createTenantWorkspace(
     .returning();
 
   // Ký token
-  const claims: AccessClaims = {
-    sub: String(ownerUser.id),
-    portal: "OFFICE",
-    roles: ["owner"],
-    tenantId: tenant.id,
-    storeIds: [store.id],
-    storeId: store.id,
-    permissions: ownerPermissions,
-  };
-
-  const accessToken = signAccessToken(claims);
-  const refreshToken = signRefreshToken(claims);
-
-  return {
-    tenant: {
-      id: tenant.id,
-      name: tenant.name,
-      code: tenant.code,
-      slug: tenant.slug,
-    },
-    store: {
-      id: store.id,
-      name: store.name,
-      inviteCode,
-    },
-    user: {
-      id: ownerUser.id,
-      sub: String(ownerUser.id),
-      username: ownerUser.username,
-      fullName: ownerUser.fullName,
-      email: ownerUser.email,
-      portal: "OFFICE" as const,
-      role: "owner" as const,
-      roles: ["owner"],
-      tenantId: tenant.id,
-      tenantName: tenant.name,
-      storeIds: [store.id],
-      storeId: store.id,
-      stores: [{ id: store.id, name: store.name }],
-      permissions: ownerPermissions,
-    },
-    accessToken,
-    refreshToken,
-  };
+  const session = await issueKonektSession(ownerUser.id, undefined, [...(identity.membershipIds ?? [actorId]), ownerUser.id]);
+  return { tenant: { id: tenant.id, name: tenant.name, code: tenant.code }, store: { id: store.id, name: store.name, inviteCode }, ...session };
 }
 
 /**
  * 3. Kiểm tra Mã mời nội bộ của Store (Verify Store Invite Code)
  */
-export async function verifyStoreInviteCode(inviteCode: string) {
-  const norm = inviteCode.trim().toUpperCase();
-  if (!norm) throw new ApiError(400, "Vui lòng nhập mã mời của cửa hàng");
+export { verifyInvite as verifyStoreInviteCode, submitJoin as submitStoreJoinRequest, listRequests as listStoreJoinRequests, decideJoin } from './staffOnboarding.service';
 
-  // Tìm store theo inviteCode
-  const store = await db.query.stores.findFirst({
-    where: eq(stores.inviteCode, norm),
-  });
-
-  if (!store) {
-    throw new ApiError(404, "Mã mời cửa hàng không hợp lệ hoặc đã hết hạn");
-  }
-
-  if (!store.isActive) {
-    throw new ApiError(400, "Chi nhánh này hiện đang tạm ngừng hoạt động");
-  }
-
-  const tenant = await db.query.tenants.findFirst({
-    where: eq(tenants.id, store.tenantId),
-  });
-
-  return {
-    storeId: store.id,
-    storeName: store.name,
-    storeAddress: store.address || "",
-    storePhone: store.phone || "",
-    inviteCode: store.inviteCode,
-    tenantId: store.tenantId,
-    tenantName: tenant?.name || "KONEKT Cafe",
-    tenantCode: tenant?.code || "",
-  };
-}
-
-/**
- * 4. Gửi yêu cầu kích hoạt nhân sự vào Store bằng mã mời nội bộ
- */
-export async function submitStoreJoinRequest(params: {
-  storeInviteCode: string;
-  email: string;
-  fullName: string;
-  phone?: string;
-  desiredPosition?: string;
-  note?: string;
-}) {
-  const emailNorm = params.email.trim().toLowerCase();
-  const fullName = params.fullName.trim();
-  if (!fullName) throw new ApiError(400, "Vui lòng nhập họ tên của bạn");
-
-  const verified = await verifyStoreInviteCode(params.storeInviteCode);
-
-  // Kiểm tra xem đã là thành viên của tenant và store này chưa
-  const existingMembership = await db.query.users.findFirst({
-    where: and(
-      eq(users.email, emailNorm),
-      eq(users.tenantId, verified.tenantId)
-    ),
-  });
-
-  if (existingMembership && existingMembership.isActive) {
-    throw new ApiError(400, `Bạn đã là thành viên của thương hiệu "${verified.tenantName}".`);
-  }
-
-  // Kiểm tra xem đã gửi yêu cầu đang chờ duyệt chưa
-  const existingRequest = await db.query.storeJoinRequests.findFirst({
-    where: and(
-      eq(storeJoinRequests.email, emailNorm),
-      eq(storeJoinRequests.storeId, verified.storeId),
-      eq(storeJoinRequests.status, "pending")
-    ),
-  });
-
-  if (existingRequest) {
-    throw new ApiError(
-      400,
-      `Bạn đã gửi yêu cầu gia nhập chi nhánh "${verified.storeName}" rồi. Vui lòng chờ Chủ quán phê duyệt.`
-    );
-  }
-
-  // Insert yêu cầu
-  const [req] = await db
-    .insert(storeJoinRequests)
-    .values({
-      tenantId: verified.tenantId,
-      storeId: verified.storeId,
-      email: emailNorm,
-      fullName,
-      phone: params.phone?.trim() || "",
-      desiredPosition: params.desiredPosition?.trim() || "Nhân viên vận hành",
-      note: params.note?.trim() || "",
-      status: "pending",
-    })
-    .returning();
-
-  return {
-    id: req.id,
-    tenantName: verified.tenantName,
-    storeName: verified.storeName,
-    status: req.status,
-    message: "Gửi yêu cầu gia nhập thành công! Chủ quán sẽ kiểm tra và phân quyền làm việc cho bạn.",
-  };
-}
-
-/**
- * 5. Chuyển đổi không gian làm việc (Switch Tenant / Select Store)
- */
-export async function switchWorkspaceTenant(
-  email: string,
-  tenantId: number,
-  storeIdChoice?: number
-) {
-  const emailNorm = email.trim().toLowerCase();
-
-  const userRecord = await db.query.users.findFirst({
-    where: and(eq(users.email, emailNorm), eq(users.tenantId, tenantId)),
-  });
-
-  if (!userRecord) {
-    throw new ApiError(403, "Bạn không thuộc thương hiệu này");
-  }
-
-  if (!userRecord.isActive) {
-    throw new ApiError(403, "Tài khoản của bạn tại thương hiệu này đã bị vô hiệu hóa");
-  }
-
-  const tenant = await db.query.tenants.findFirst({
-    where: eq(tenants.id, tenantId),
-  });
-  if (!tenant) throw new ApiError(404, "Không tìm thấy thương hiệu");
-
-  const tenantStores = await db.query.stores.findMany({
-    where: eq(stores.tenantId, tenantId),
-    orderBy: [stores.id],
-  });
-
-  const storeList = tenantStores.map((s) => ({
-    id: s.id,
-    name: s.name,
-    address: s.address,
-    inviteCode: s.inviteCode,
-  }));
-  const storeIds = storeList.map((s) => s.id);
-
-  // Quyết định storeId hiện tại
-  let currentStoreId = storeIdChoice || userRecord.storeId || storeIds[0];
-
-  // Quyết định portal
-  let portal: Portal = "OFFICE";
-  if (userRecord.role === "staff") {
-    portal = "POS";
-  } else if (userRecord.role === "store_manager") {
-    portal = "STORE";
-  } else {
-    portal = "OFFICE";
-  }
-
-  const permissions =
-    (userRecord.customPermissions as string[]) ||
-    getDefaultPermissionsForRole(userRecord.role);
-
-  const claims: AccessClaims = {
-    sub: String(userRecord.id),
-    portal,
-    roles: [userRecord.role],
-    tenantId: tenant.id,
-    storeIds,
-    storeId: currentStoreId,
-    permissions,
-  };
-
-  const accessToken = signAccessToken(claims);
-  const refreshToken = signRefreshToken(claims);
-
-  return {
-    user: {
-      id: userRecord.id,
-      sub: String(userRecord.id),
-      username: userRecord.username,
-      fullName: userRecord.fullName,
-      email: userRecord.email,
-      portal,
-      role: userRecord.role,
-      roles: [userRecord.role],
-      tenantId: tenant.id,
-      tenantName: tenant.name,
-      tenantCode: tenant.code,
-      storeIds,
-      storeId: currentStoreId,
-      stores: storeList,
-      permissions,
-    },
-    accessToken,
-    refreshToken,
-  };
-}
-
-/**
- * 6. Lấy danh sách yêu cầu gia nhập dành cho Owner
- */
-export async function listStoreJoinRequests(tenantId: number) {
-  const list = await db.query.storeJoinRequests.findMany({
-    where: eq(storeJoinRequests.tenantId, tenantId),
-    orderBy: [desc(storeJoinRequests.createdAt)],
-  });
-
-  const enriched = [];
-  for (const r of list) {
-    const s = await db.query.stores.findFirst({ where: eq(stores.id, r.storeId) });
-    const approver = r.approvedBy
-      ? await db.query.users.findFirst({ where: eq(users.id, r.approvedBy) })
-      : null;
-
-    enriched.push({
-      id: r.id,
-      tenantId: r.tenantId,
-      storeId: r.storeId,
-      storeName: s?.name || `Store #${r.storeId}`,
-      email: r.email,
-      fullName: r.fullName,
-      phone: r.phone,
-      desiredPosition: r.desiredPosition,
-      note: r.note,
-      status: r.status,
-      assignedRole: r.assignedRole,
-      customPermissions: r.customPermissions,
-      approvedByName: approver?.fullName || approver?.username || null,
-      rejectedReason: r.rejectedReason,
-      createdAt: r.createdAt,
-      updatedAt: r.updatedAt,
-    });
-  }
-
-  return enriched;
-}
-
-/**
- * 7. Duyệt yêu cầu gia nhập & Phân quyền chi tiết (Owner Approval with Granular Permissions)
- */
-export async function approveStoreJoinRequest(
-  requestId: number,
-  approverUserId: number,
-  tenantId: number,
-  params: {
-    role: "store_manager" | "shift_leader" | "staff";
-    storeId?: number;
-    customPermissions?: string[];
-  }
-) {
-  const req = await db.query.storeJoinRequests.findFirst({
-    where: and(
-      eq(storeJoinRequests.id, requestId),
-      eq(storeJoinRequests.tenantId, tenantId)
-    ),
-  });
-
-  if (!req) throw new ApiError(404, "Không tìm thấy yêu cầu gia nhập");
-  if (req.status !== "pending") {
-    throw new ApiError(400, `Yêu cầu này đã được xử lý (trạng thái: ${req.status})`);
-  }
-
-  const assignedStoreId = params.storeId || req.storeId;
-  const assignedRole = params.role || "staff";
-
-  // Permissions được Owner chỉ định hoặc lấy theo role mặc định
-  const finalPermissions =
-    Array.isArray(params.customPermissions) && params.customPermissions.length > 0
-      ? params.customPermissions
-      : getDefaultPermissionsForRole(assignedRole);
-
-  // Kiểm tra xem user này đã có tài khoản trong hệ thống chưa
-  const existingUserGlobal = await db.query.users.findFirst({
-    where: eq(users.email, req.email),
-  });
-
-  const passwordHash =
-    existingUserGlobal?.passwordHash || (await bcrypt.hash("staff123", 10));
-  const username =
-    existingUserGlobal?.username || req.email.split("@")[0] || `staff_${req.id}`;
-
-  // Kiểm tra xem đã có record user trong tenant này chưa
-  const existingInTenant = await db.query.users.findFirst({
-    where: and(eq(users.email, req.email), eq(users.tenantId, tenantId)),
-  });
-
-  if (existingInTenant) {
-    // Cập nhật record hiện có
-    await db
-      .update(users)
-      .set({
-        storeId: assignedStoreId,
-        role: assignedRole,
-        customPermissions: finalPermissions,
-        fullName: req.fullName || existingInTenant.fullName,
-        phone: req.phone || existingInTenant.phone,
-        isActive: true,
-        updatedAt: new Date(),
-      })
-      .where(eq(users.id, existingInTenant.id));
-  } else {
-    // Tạo record mới cho tenant này
-    await db.insert(users).values({
-      tenantId,
-      storeId: assignedStoreId,
-      username,
-      email: req.email,
-      passwordHash,
-      fullName: req.fullName,
-      phone: req.phone,
-      role: assignedRole,
-      customPermissions: finalPermissions,
-      isActive: true,
-    });
-  }
-
-  // Cập nhật trạng thái request
-  await db
-    .update(storeJoinRequests)
-    .set({
-      status: "approved",
-      assignedRole,
-      customPermissions: finalPermissions,
-      approvedBy: approverUserId,
-      updatedAt: new Date(),
-    })
-    .where(eq(storeJoinRequests.id, requestId));
-
-  return {
-    success: true,
-    message: `Đã phê duyệt và phân quyền cho ${req.fullName} thành công.`,
-  };
-}
-
-/**
- * 8. Từ chối yêu cầu gia nhập
- */
-export async function rejectStoreJoinRequest(
-  requestId: number,
-  approverUserId: number,
-  tenantId: number,
-  reason?: string
-) {
-  const req = await db.query.storeJoinRequests.findFirst({
-    where: and(
-      eq(storeJoinRequests.id, requestId),
-      eq(storeJoinRequests.tenantId, tenantId)
-    ),
-  });
-
-  if (!req) throw new ApiError(404, "Không tìm thấy yêu cầu gia nhập");
-  if (req.status !== "pending") {
-    throw new ApiError(400, `Yêu cầu này đã được xử lý (trạng thái: ${req.status})`);
-  }
-
-  await db
-    .update(storeJoinRequests)
-    .set({
-      status: "rejected",
-      rejectedReason: reason?.trim() || "Không phù hợp thời điểm hiện tại",
-      approvedBy: approverUserId,
-      updatedAt: new Date(),
-    })
-    .where(eq(storeJoinRequests.id, requestId));
-
-  return {
-    success: true,
-    message: `Đã từ chối yêu cầu gia nhập của ${req.fullName}.`,
-  };
+export async function switchWorkspaceTenant(claims: AccessClaims, tenantId: number, storeIdChoice?: number) {
+  const memberships = await provenMemberships(claims);
+  const member = memberships.find(m => m.tenantId === tenantId);
+  if (!member) throw new ApiError(403, 'Bạn không thuộc thương hiệu này');
+  return issueKonektSession(member.id, storeIdChoice, memberships.map(m => m.id));
 }

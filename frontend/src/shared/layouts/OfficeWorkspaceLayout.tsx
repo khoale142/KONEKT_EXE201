@@ -226,6 +226,12 @@ export default function OfficeWorkspaceLayout({ children }: PropsWithChildren) {
 
   // Owner thấy tất cả nav items (superuser bypass)
   const showOwner = isOwnerOrAdmin(user);
+  const [staffRevision, setStaffRevision] = useState(0);
+  useEffect(() => {
+    const refresh = () => setStaffRevision(v => v + 1);
+    window.addEventListener('konekt:staff-changed', refresh);
+    return () => window.removeEventListener('konekt:staff-changed', refresh);
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -241,7 +247,7 @@ export default function OfficeWorkspaceLayout({ children }: PropsWithChildren) {
     return () => {
       active = false;
     };
-  }, [location.pathname]);
+  }, [location.pathname, user?.tenantId, staffRevision]);
 
   const isHrSurface = location.pathname.startsWith("/office/hr");
   // Nếu là Owner -> Dùng Theme xanh rêu mẫu (#3D503C & #FEF8EE)

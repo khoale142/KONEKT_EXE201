@@ -68,9 +68,9 @@ export default function SelectStorePage() {
     void init();
   }, [user?.tenantId]);
 
-  const handleCopyInviteCode = (code?: string) => {
+  const handleCopyInviteCode = async (code?: string) => {
     if (!code) return;
-    navigator.clipboard.writeText(code);
+    try { await navigator.clipboard.writeText(code); } catch { alert("Không sao chép được. Hãy chọn mã và sao chép thủ công."); return; }
     setCopiedCode(code);
     setTimeout(() => setCopiedCode(null), 2000);
   };
@@ -80,12 +80,13 @@ export default function SelectStorePage() {
     try {
       const data = await workspaceApi.selectTenant({
         tenantId: tenant.tenantId,
+        membershipId: tenant.membershipId,
         storeId: store.id,
       });
       setTokensAndUser(data.accessToken, data.refreshToken, data.user);
       navigate("/pos", { replace: true });
     } catch {
-      navigate("/pos");
+      alert("Không thể chuyển chi nhánh. Vui lòng thử lại.");
     }
   };
 
@@ -94,12 +95,13 @@ export default function SelectStorePage() {
     try {
       const data = await workspaceApi.selectTenant({
         tenantId: tenant.tenantId,
+        membershipId: tenant.membershipId,
         storeId: store.id,
       });
       setTokensAndUser(data.accessToken, data.refreshToken, data.user);
       navigate("/store/manager", { replace: true });
     } catch {
-      navigate("/store/manager");
+      alert("Không thể chuyển chi nhánh. Vui lòng thử lại.");
     }
   };
 
@@ -108,6 +110,7 @@ export default function SelectStorePage() {
     try {
       const data = await workspaceApi.selectTenant({
         tenantId: tenant.tenantId,
+        membershipId: tenant.membershipId,
       });
       setTokensAndUser(data.accessToken, data.refreshToken, data.user);
       navigate("/office/dashboard", { replace: true });
@@ -127,7 +130,7 @@ export default function SelectStorePage() {
       setAddingStore(true);
       setAddStoreError(null);
       // Gọi API tạo store trực tiếp
-      await api.post("/stores", {
+      await api.post("/workspace/stores", {
         name: newStoreName.trim(),
         address: newStoreAddress.trim() || undefined,
         phone: newStorePhone.trim() || undefined,

@@ -11,6 +11,9 @@ import {
   Gift,
   Building2,
   Layers,
+  AlertCircle,
+  ArrowRight,
+  Clock,
   type LucideIcon,
 } from "lucide-react";
 import { useAuthStore, isOwnerOrAdmin } from "../../../app/store/auth.store";
@@ -2611,16 +2614,49 @@ export default function PosOrderPage() {
         ) : null}
 
         {shiftBlockedMessage ? (
-          <div className="pos-alert pos-alert--danger">
-            <div style={{ fontWeight: 700, marginBottom: 6 }}>
-              {heldMeta ? "Khong the thanh toan don giu" : "Khong the tao order"}
+          <div
+            className="pos-alert pos-alert--danger"
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              gap: 14,
+              flexWrap: "wrap",
+              padding: "14px 18px",
+              borderRadius: 14,
+              background: "#fef2f2",
+              border: "1px solid #fecaca",
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "flex-start", gap: 10 }}>
+              <AlertCircle size={20} color="#b91c1c" style={{ marginTop: 2, flexShrink: 0 }} />
+              <div>
+                <div style={{ fontWeight: 700, fontSize: 14, color: "#991b1b" }}>
+                  {heldMeta ? "Không thể thanh toán đơn giữ" : "Chưa có ca làm việc nào đang mở"}
+                </div>
+                <div style={{ fontSize: 13, color: "#7f1d1d", marginTop: 2 }}>
+                  {shiftBlockedMessage}
+                </div>
+              </div>
             </div>
-            <div>{shiftBlockedMessage}</div>
             <button
               onClick={() => nav("/pos/shift-reconciliation")}
-              style={{ marginTop: 10 }}
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 6,
+                padding: "8px 16px",
+                borderRadius: 10,
+                background: "#364D39",
+                color: "#FAF6F3",
+                fontWeight: 700,
+                fontSize: 13,
+                border: "none",
+                cursor: "pointer",
+                boxShadow: "0 2px 4px rgba(0,0,0,0.1)",
+              }}
             >
-              Qua man hinh mo ca
+              <Clock size={14} /> Mở ca bán hàng ngay <ArrowRight size={14} />
             </button>
           </div>
         ) : null}

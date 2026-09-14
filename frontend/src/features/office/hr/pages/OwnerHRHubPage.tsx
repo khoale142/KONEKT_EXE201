@@ -1,3 +1,6 @@
+import StoreInvitePanel from '../components/StoreInvitePanel';
+import OwnerStaffDirectoryPage from './OwnerStaffDirectoryPage';
+import { useAuthStore } from '../../../../app/store/auth.store';
 import { useState, useEffect } from "react";
 import { useSearchParams } from "react-router-dom";
 import {
@@ -8,7 +11,8 @@ import {
   Wallet,
 } from "lucide-react";
 import StaffJoinRequestsPage from "./StaffJoinRequestsPage";
-import HREmployeesPage from "./HREmployeesPage";
+import { CanonicalTenantJoinRequestsPanel } from "../../../workspace/pages/TenantJoinRequestsPage";
+
 import HRSchedulesPage from "./HRSchedulesWorkspaceV2Page";
 import HRAttendancePage from "./HRAttendanceWorkspaceV2Page";
 import PayrollReportPage from "../../../head-officer/pages/PayrollReportPage";
@@ -19,15 +23,18 @@ type HRTab = "requests" | "employees" | "schedules" | "attendance" | "payroll";
 export default function OwnerHRHubPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const currentTab = (searchParams.get("tab") as HRTab) || "requests";
+  const tenantId = useAuthStore(s => s.user?.tenantId);
+  const [revision, setRevision] = useState(0);
+  useEffect(() => { const fn = () => setRevision(v => v + 1); window.addEventListener("konekt:staff-changed", fn); return () => window.removeEventListener("konekt:staff-changed", fn); }, []);
   const [pendingCount, setPendingCount] = useState<number>(0);
 
   useEffect(() => {
     let active = true;
-    workspaceApi
-      .getStaffRequests()
-      .then((res) => {
+    Promise.all([workspaceApi.getStaffRequests(), workspaceApi.getTenantJoinRequests()])
+      .then(([legacyRequests, canonicalRequests]) => {
         if (active) {
-          const pending = res.filter((r) => r.status === "pending").length;
+          const pending = legacyRequests.filter((r) => r.status === "pending").length
+            + canonicalRequests.filter((r) => r.status === "pending").length;
           setPendingCount(pending);
         }
       })
@@ -35,7 +42,7 @@ export default function OwnerHRHubPage() {
     return () => {
       active = false;
     };
-  }, [currentTab]);
+  }, [currentTab, tenantId, revision]);
 
   const handleTabChange = (tab: HRTab) => {
     setSearchParams({ tab });
@@ -53,7 +60,7 @@ export default function OwnerHRHubPage() {
       key: "employees",
       label: "Danh sách nhân sự",
       icon: Users,
-      description: "Danh bạ toàn chuỗi, chi nhánh, vai trò & mức lương",
+      description: "Danh bạ toàn chuỗi, chi nhánh và vai trò",
     },
     {
       key: "schedules",
@@ -212,8 +219,8 @@ export default function OwnerHRHubPage() {
 
       {/* Tab Content */}
       <div>
-        {currentTab === "requests" && <StaffJoinRequestsPage />}
-        {currentTab === "employees" && <HREmployeesPage />}
+        {currentTab === "requests" && <><StoreInvitePanel key={tenantId} /><CanonicalTenantJoinRequestsPanel key={`canonical-${tenantId}`} compact /><StaffJoinRequestsPage key={tenantId} /></>}
+        {currentTab === "employees" && <OwnerStaffDirectoryPage key={tenantId} />}
         {currentTab === "schedules" && <HRSchedulesPage />}
         {currentTab === "attendance" && <HRAttendancePage />}
         {currentTab === "payroll" && <PayrollReportPage />}

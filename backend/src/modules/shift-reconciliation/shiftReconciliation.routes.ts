@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { authGuard } from "../../middlewares/authGuard";
 import { portalGuard } from "../../middlewares/portalGuard";
+import { requirePermission, requireStoreAccess } from "../../middlewares/canonicalAuthorizationGuard";
 import {
   closePosShiftReconciliation,
   getCurrentPosShiftReconciliation,
@@ -12,7 +13,11 @@ import {
 
 const router = Router();
 
-router.use(authGuard, portalGuard(["POS"]));
+router.use(authGuard, portalGuard(["POS", "STORE", "OFFICE"]));
+router.use(
+  requirePermission("pos.access"),
+  requireStoreAccess((req) => Number(req.headers["x-store-id"] ?? req.query.storeId ?? req.body?.storeId ?? req.user?.storeId ?? req.user?.storeIds?.[0]) || undefined),
+);
 
 router.get("/current", getCurrentPosShiftReconciliation);
 router.get("/", listPosShiftReconciliations);

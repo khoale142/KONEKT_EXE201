@@ -15,6 +15,7 @@ export default function WorkspaceSwitcher() {
   const user = useAuthStore((s) => s.user);
   const setTokensAndUser = useAuthStore((s) => s.setTokensAndUser);
 
+  const [switchError, setSwitchError] = useState("");
   const [isOpen, setIsOpen] = useState(false);
   const [tenants, setTenants] = useState<WorkspaceTenant[]>([]);
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -31,7 +32,7 @@ export default function WorkspaceSwitcher() {
     if (user?.sub) {
       void fetchTenants();
     }
-  }, [user?.sub]);
+  }, [user?.sub, user?.tenantId]);
 
   // Click outside to close dropdown
   useEffect(() => {
@@ -49,10 +50,10 @@ export default function WorkspaceSwitcher() {
   const currentTenant = tenants.find((t) => t.tenantId === user?.tenantId);
   const currentStore = currentTenant?.stores.find((s) => s.id === user?.storeId);
 
-  const handleSwitchTenant = async (tenantId: number) => {
+  const handleSwitchTenant = async (tenant: WorkspaceTenant) => {
     setIsOpen(false);
     try {
-      const data = await workspaceApi.selectTenant({ tenantId });
+      const data = await workspaceApi.selectTenant({ tenantId: tenant.tenantId, membershipId: tenant.membershipId });
       setTokensAndUser(data.accessToken, data.refreshToken, data.user);
       navigate("/workspace/select-store");
     } catch {
@@ -66,17 +67,19 @@ export default function WorkspaceSwitcher() {
     try {
       const data = await workspaceApi.selectTenant({
         tenantId: user.tenantId,
+        membershipId: currentTenant?.membershipId,
         storeId,
       });
       setTokensAndUser(data.accessToken, data.refreshToken, data.user);
       window.location.reload();
     } catch {
-      // silent
+      setSwitchError("Không chuyển được chi nhánh. Vui lòng thử lại.");
     }
   };
 
   return (
     <div ref={dropdownRef} style={{ position: "relative" }}>
+      {switchError && <p role="alert">{switchError}</p>}
       {/* Switcher Trigger Button */}
       <button
         type="button"
@@ -170,7 +173,7 @@ export default function WorkspaceSwitcher() {
                 return (
                   <div
                     key={t.tenantId}
-                    onClick={() => !isCurrent && handleSwitchTenant(t.tenantId)}
+                    onClick={() => !isCurrent && handleSwitchTenant(t)}
                     style={{
                       display: "flex",
                       alignItems: "center",

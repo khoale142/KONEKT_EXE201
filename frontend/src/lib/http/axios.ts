@@ -7,7 +7,7 @@ const api = axios.create({
   baseURL: API_BASE_URL,
 });
 
-let refreshPromise: Promise<{ accessToken: string; refreshToken: string }> | null = null;
+let refreshPromise: Promise<{ accessToken: string; refreshToken: string; user?: import("../../app/store/auth.store").AuthUser }> | null = null;
 
 api.interceptors.request.use((config) => {
   const access = token.getAccess();
@@ -23,7 +23,7 @@ api.interceptors.response.use(
   async (err) => {
     const original = err?.config;
     const isLoginRequest =
-      original?.url && /\/auth\/login\//.test(String(original.url));
+      original?.url && /\/auth\/(login|register|demo-login|refresh|activate-workspace)/.test(String(original.url));
 
     // Never run refresh when the failed request was a login (user is signing in).
     if (isLoginRequest) throw err;
@@ -48,6 +48,10 @@ api.interceptors.response.use(
         token.setAccess(refreshed.accessToken);
         token.setRefresh(refreshed.refreshToken);
 
+        if (refreshed.user) {
+          const { useAuthStore } = await import("../../app/store/auth.store");
+          useAuthStore.getState().setTokensAndUser(refreshed.accessToken, refreshed.refreshToken, refreshed.user);
+        }
         original.headers = original.headers || {};
         original.headers.Authorization = `Bearer ${refreshed.accessToken}`;
         return api(original);

@@ -1,3 +1,4 @@
+import { token } from '../../../lib/token';
 import api from "../../../lib/http/axios";
 
 export interface WorkspaceStore {
@@ -11,12 +12,14 @@ export interface WorkspaceStore {
 
 export interface WorkspaceTenant {
   tenantId: number;
+  membershipId?: number;
   tenantName: string;
   tenantCode: string;
   tenantSlug: string;
   status: string;
   planTier: string;
   role: string;
+  storeAccessScope?: "all" | "selected";
   userRecordId: number;
   assignedStoreId?: number;
   customPermissions: string[];
@@ -27,8 +30,8 @@ export interface PendingStoreRequest {
   id: number;
   tenantId: number;
   tenantName: string;
-  storeId: number;
-  storeName: string;
+  storeId?: number;
+  storeName?: string;
   storeAddress?: string;
   desiredPosition?: string;
   note?: string;
@@ -44,8 +47,8 @@ export interface WorkspacesResponse {
 export interface VerifiedStoreInvite {
   storeId: number;
   storeName: string;
-  storeAddress: string;
-  storePhone: string;
+  storeAddress?: string | null;
+  storePhone?: string | null;
   inviteCode: string;
   tenantId: number;
   tenantName: string;
@@ -80,7 +83,15 @@ export interface StoreJoinRequestItem {
   updatedAt: string;
 }
 
+export interface TenantJoinRequestItem { id: number; status: 'pending' | 'approved' | 'rejected' | 'cancelled'; createdAt: string; userId?: number; fullName?: string | null; email?: string; requestedStoreId?: number | null; requestedStoreName?: string | null; }
+
 export const workspaceApi = {
+  getOwnerStores: async (): Promise<(WorkspaceStore & { tenantId: number; tenantName: string })[]> => (await api.get('/workspace/stores')).data.data,
+  ensureInvite: async (id: number): Promise<WorkspaceStore> => (await api.post('/workspace/stores/' + id + '/invite-code')).data.data,
+  getJoinStatus: async (): Promise<{ status: string; request: (StoreJoinRequestItem & { tenantName: string }) | null }> => (await api.get('/workspace/my-store-join-status')).data.data,
+  activate: async () => (await api.post('/auth/activate-workspace', { refreshToken: token.getRefresh() })).data,
+  listStaff: async (params: { page: number; search?: string; storeId?: number }): Promise<{ items: StaffDirectoryItem[]; total: number }> => (await api.get('/workspace/staff', { params })).data.data,
+
   getWorkspaces: async (): Promise<WorkspacesResponse> => {
     const res = await api.get("/workspace/tenants");
     return res.data.data;
@@ -98,7 +109,7 @@ export const workspaceApi = {
 
   verifyStoreInvite: async (code: string): Promise<VerifiedStoreInvite> => {
     const res = await api.post("/workspace/verify-store-invite", { code });
-    return res.data.data;
+    return { ...res.data.data, inviteCode: code.trim().toUpperCase() };
   },
 
   submitJoinStoreRequest: async (payload: {
@@ -113,7 +124,16 @@ export const workspaceApi = {
     return res.data.data;
   },
 
-  selectTenant: async (payload: { tenantId: number; storeId?: number }) => {
+  submitCanonicalStoreJoinRequest: async (storeInviteCode: string) => (await api.post('/workspace/tenant-join-requests', { storeInviteCode })).data.data,
+  // Retained only for callers still using the deprecated Tenant-code endpoint.
+  submitTenantJoinRequest: async (joinCode: string) => (await api.post('/workspace/tenant-join-requests', { joinCode })).data.data,
+  getTenantJoinRequests: async (): Promise<TenantJoinRequestItem[]> => (await api.get('/workspace/tenant-join-requests')).data.data,
+  approveTenantJoinRequest: async (id: number, role: 'staff' | 'leader' | 'manager', storeIds: number[]) => (await api.post(`/workspace/tenant-join-requests/${id}/approve`, { role, storeIds })).data.data,
+  rejectTenantJoinRequest: async (id: number) => (await api.post(`/workspace/tenant-join-requests/${id}/reject`)).data.data,
+  cancelTenantJoinRequest: async (id: number) => (await api.post(`/workspace/tenant-join-requests/${id}/cancel`)).data.data,
+  setCanonicalMembershipStoreAccess: async (membershipId: number, storeIds: number[]) => (await api.put(`/workspace/members/${membershipId}/store-access`, { storeIds })).data.data,
+
+  selectTenant: async (payload: { tenantId: number; membershipId?: number; storeId?: number }) => {
     const res = await api.post("/workspace/select-tenant", payload);
     return res.data.data;
   },
@@ -124,8 +144,12 @@ export const workspaceApi = {
   },
 
   getStaffRequests: async (): Promise<StoreJoinRequestItem[]> => {
-    const res = await api.get("/workspace/staff-requests");
-    return res.data.data;
+    const items: StoreJoinRequestItem[] = [];
+    for (let page = 1; ; page++) {
+      const res = await api.get("/workspace/staff-requests", { params: { page, pageSize: 100 } });
+      items.push(...res.data.data.items);
+      if (items.length >= res.data.data.total) return items;
+    }
   },
 
   approveStaffRequest: async (
@@ -145,3 +169,11 @@ export const workspaceApi = {
     return res.data.data;
   },
 };
+
+export interface StaffDirectoryItem {
+  id: number; fullName: string | null; email: string; phone: string | null;
+  role: string; storeId: number | null; storeName: string | null; isActive: boolean;
+}
+export function notifyStaffChanged(tenantId?: number) {
+  window.dispatchEvent(new CustomEvent('konekt:staff-changed', { detail: tenantId }));
+}

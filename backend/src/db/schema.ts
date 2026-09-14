@@ -6,13 +6,18 @@ import {
   text,
   boolean,
   timestamp,
+  date,
   decimal,
   pgEnum,
   uniqueIndex,
   index,
   jsonb,
+  check,
+  unique,
+  foreignKey,
+  type AnyPgColumn,
 } from 'drizzle-orm/pg-core';
-import { relations } from 'drizzle-orm';
+import { relations, sql } from 'drizzle-orm';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // ENUMS
@@ -68,6 +73,40 @@ export const shiftStatusEnum = pgEnum('shift_status', [
   'reconciled',
 ]);
 
+/** Vai trò canonical theo TenantMembership; không dùng giá trị role legacy. */
+export const membershipRoleEnum = pgEnum('membership_role', [
+  'owner',
+  'manager',
+  'leader',
+  'staff',
+]);
+
+/** Trạng thái quan hệ Account - Tenant. */
+export const membershipStatusEnum = pgEnum('membership_status', [
+  'active',
+  'suspended',
+]);
+
+/** Phạm vi Store của một Tenant membership. */
+export const storeAccessScopeEnum = pgEnum('store_access_scope', [
+  'all',
+  'selected',
+]);
+
+/** Override quyền trên từng membership. */
+export const membershipPermissionEffectEnum = pgEnum('membership_permission_effect', [
+  'allow',
+  'deny',
+]);
+
+/** Trạng thái future Tenant join request. */
+export const tenantJoinRequestStatusEnum = pgEnum('tenant_join_request_status', [
+  'pending',
+  'approved',
+  'rejected',
+  'cancelled',
+]);
+
 // ─────────────────────────────────────────────────────────────────────────────
 // 1. TENANTS – Thương hiệu / Tổ chức kinh doanh
 //    Mỗi Tenant là 1 quán/chuỗi quán độc lập trên nền tảng SaaS.
@@ -80,9 +119,14 @@ export const tenants = pgTable('tenants', {
   slug: varchar('slug', { length: 100 }).notNull().unique(),
   status: tenantStatusEnum('status').default('trial').notNull(),
   planTier: varchar('plan_tier', { length: 50 }).default('free'),
+  joinCode: varchar('join_code', { length: 50 }),
+  createdBy: integer('created_by').references((): AnyPgColumn => users.id, { onDelete: 'set null' }),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
-});
+}, (table) => [
+  uniqueIndex('idx_tenants_join_code').on(table.joinCode).where(sql`${table.joinCode} is not null`),
+  index('idx_tenants_created_by').on(table.createdBy),
+]).enableRLS();
 
 // ─────────────────────────────────────────────────────────────────────────────
 // 2. STORES – Chi nhánh / Cửa hàng thuộc Tenant
@@ -102,7 +146,11 @@ export const stores = pgTable('stores', {
 }, (table) => [
   index('idx_stores_tenant_id').on(table.tenantId),
   index('idx_stores_invite_code').on(table.inviteCode),
-]);
+  // Required as a composite-FK target for membership_store_access. Although
+  // id is already globally unique, PostgreSQL needs this explicit pair to
+  // prove that the Store belongs to the supplied Tenant.
+  unique('uq_stores_id_tenant').on(table.id, table.tenantId),
+]).enableRLS();
 
 // ─────────────────────────────────────────────────────────────────────────────
 // 3. USERS – Tài khoản người dùng (Owner, Store Manager, Staff, Customer)
@@ -124,11 +172,12 @@ export const users = pgTable('users', {
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
 }, (table) => [
+  uniqueIndex('idx_users_unassigned_email').on(sql`lower(${table.email})`).where(sql`${table.tenantId} is null`),
   uniqueIndex('idx_users_email_tenant').on(table.email, table.tenantId),
   index('idx_users_tenant_id').on(table.tenantId),
   index('idx_users_store_id').on(table.storeId),
   index('idx_users_role').on(table.role),
-]);
+]).enableRLS();
 
 // ─────────────────────────────────────────────────────────────────────────────
 // 3b. STORE_JOIN_REQUESTS – Yêu cầu gia nhập Store bằng mã mời nội bộ
@@ -152,11 +201,143 @@ export const storeJoinRequests = pgTable('store_join_requests', {
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
 }, (table) => [
+  uniqueIndex('idx_join_one_pending_user').on(table.userId).where(sql`${table.status} = 'pending' and ${table.userId} is not null`),
+  index('idx_join_user_history').on(table.userId, table.id.desc()),
+  index('idx_join_tenant_status').on(table.tenantId, table.status, table.id.desc()),
+  check('chk_join_status', sql`${table.status} in ('pending', 'approved', 'rejected')`),
+  check('chk_join_assigned_role', sql`${table.assignedRole} is null or ${table.assignedRole} in ('staff', 'shift_leader', 'store_manager')`),
   index('idx_store_join_requests_tenant').on(table.tenantId),
   index('idx_store_join_requests_store').on(table.storeId),
   index('idx_store_join_requests_email').on(table.email),
   index('idx_store_join_requests_status').on(table.status),
-]);
+]).enableRLS();
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 3c. CANONICAL ACCOUNT MEMBERSHIP FOUNDATION (REQ-17 / PLAN-17)
+//    Additive only: legacy users.tenant_id/store_id/role remain authoritative
+//    until the later refactor phases explicitly migrate their consumers.
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const tenantMemberships = pgTable('tenant_memberships', {
+  id: serial('id').primaryKey(),
+  tenantId: integer('tenant_id').references(() => tenants.id, { onDelete: 'cascade' }).notNull(),
+  userId: integer('user_id').references(() => users.id, { onDelete: 'cascade' }).notNull(),
+  role: membershipRoleEnum('role').default('staff').notNull(),
+  status: membershipStatusEnum('status').default('active').notNull(),
+  storeAccessScope: storeAccessScopeEnum('store_access_scope').default('selected').notNull(),
+  joinedAt: timestamp('joined_at', { withTimezone: true }).defaultNow().notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+}, (table) => [
+  unique('uq_tenant_memberships_tenant_user').on(table.tenantId, table.userId),
+  // Required as a composite-FK target for membership_store_access.
+  unique('uq_tenant_memberships_id_tenant').on(table.id, table.tenantId),
+  index('idx_tenant_memberships_user_status').on(table.userId, table.status),
+  index('idx_tenant_memberships_tenant_status').on(table.tenantId, table.status),
+]).enableRLS();
+
+export const membershipStoreAccess = pgTable('membership_store_access', {
+  membershipId: integer('membership_id').notNull(),
+  storeId: integer('store_id').notNull(),
+  // Kept on the row so PostgreSQL can enforce Tenant consistency with two
+  // composite foreign keys, including when either parent Tenant changes.
+  tenantId: integer('tenant_id').notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+}, (table) => [
+  unique('uq_membership_store_access_membership_store').on(table.membershipId, table.storeId),
+  index('idx_membership_store_access_store').on(table.storeId),
+  index('idx_membership_store_access_tenant').on(table.tenantId),
+  foreignKey({
+    columns: [table.membershipId, table.tenantId],
+    foreignColumns: [tenantMemberships.id, tenantMemberships.tenantId],
+    name: 'membership_store_access_membership_tenant_fk',
+  }).onDelete('cascade'),
+  foreignKey({
+    columns: [table.storeId, table.tenantId],
+    foreignColumns: [stores.id, stores.tenantId],
+    name: 'membership_store_access_store_tenant_fk',
+  }).onDelete('cascade'),
+]).enableRLS();
+
+export const permissions = pgTable('permissions', {
+  id: serial('id').primaryKey(),
+  key: varchar('key', { length: 100 }).notNull().unique(),
+  name: varchar('name', { length: 255 }).notNull(),
+  module: varchar('module', { length: 100 }).notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+}).enableRLS();
+
+// A row is an allow. Deliberately no effect column belongs on role_permissions.
+export const rolePermissions = pgTable('role_permissions', {
+  role: membershipRoleEnum('role').notNull(),
+  permissionId: integer('permission_id').references(() => permissions.id, { onDelete: 'cascade' }).notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+}, (table) => [
+  unique('uq_role_permissions_role_permission').on(table.role, table.permissionId),
+  index('idx_role_permissions_permission').on(table.permissionId),
+]).enableRLS();
+
+export const membershipPermissionOverrides = pgTable('membership_permission_overrides', {
+  membershipId: integer('membership_id').references(() => tenantMemberships.id, { onDelete: 'cascade' }).notNull(),
+  permissionId: integer('permission_id').references(() => permissions.id, { onDelete: 'cascade' }).notNull(),
+  effect: membershipPermissionEffectEnum('effect').notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+}, (table) => [
+  unique('uq_membership_permission_overrides_membership_permission').on(table.membershipId, table.permissionId),
+  index('idx_membership_permission_overrides_permission').on(table.permissionId),
+]).enableRLS();
+
+export const tenantJoinRequests = pgTable('tenant_join_requests', {
+  id: serial('id').primaryKey(),
+  tenantId: integer('tenant_id').references(() => tenants.id, { onDelete: 'cascade' }).notNull(),
+  userId: integer('user_id').references(() => users.id, { onDelete: 'cascade' }).notNull(),
+  // Nullable for historic Tenant-code requests. New Store-code requests always
+  // resolve this server-side from the reusable Store invite code.
+  requestedStoreId: integer('requested_store_id').references(() => stores.id, { onDelete: 'set null' }),
+  status: tenantJoinRequestStatusEnum('status').default('pending').notNull(),
+  assignedRole: membershipRoleEnum('assigned_role'),
+  reviewedBy: integer('reviewed_by').references(() => users.id, { onDelete: 'set null' }),
+  reviewedAt: timestamp('reviewed_at', { withTimezone: true }),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+}, (table) => [
+  uniqueIndex('uq_tenant_join_requests_pending_user_tenant').on(table.tenantId, table.userId).where(sql`${table.status} = 'pending'`),
+  index('idx_tenant_join_requests_tenant_status').on(table.tenantId, table.status, table.createdAt.desc()),
+  index('idx_tenant_join_requests_user_status').on(table.userId, table.status, table.createdAt.desc()),
+  index('idx_tenant_join_requests_requested_store_status').on(table.requestedStoreId, table.status),
+  index('idx_tenant_join_requests_reviewed_by').on(table.reviewedBy),
+  check('chk_tenant_join_requests_assigned_role', sql`${table.assignedRole} is null or ${table.assignedRole} in ('staff', 'leader', 'manager')`),
+  check('chk_tenant_join_requests_review_state', sql`
+    (${table.status} = 'pending' and ${table.assignedRole} is null and ${table.reviewedBy} is null and ${table.reviewedAt} is null)
+    or (${table.status} = 'approved' and ${table.assignedRole} is not null and ${table.reviewedBy} is not null and ${table.reviewedAt} is not null)
+    or (${table.status} = 'rejected' and ${table.assignedRole} is null and ${table.reviewedBy} is not null and ${table.reviewedAt} is not null)
+    or (${table.status} = 'cancelled' and ${table.assignedRole} is null and ${table.reviewedBy} is null and ${table.reviewedAt} is null)
+  `),
+]).enableRLS();
+
+export const employmentProfiles = pgTable('employment_profiles', {
+  id: serial('id').primaryKey(),
+  membershipId: integer('membership_id').references(() => tenantMemberships.id, { onDelete: 'cascade' }).notNull(),
+  employeeCode: varchar('employee_code', { length: 100 }),
+  employmentType: varchar('employment_type', { length: 50 }),
+  hourlyWage: decimal('hourly_wage', { precision: 14, scale: 2 }),
+  monthlySalary: decimal('monthly_salary', { precision: 14, scale: 2 }),
+  hireDate: date('hire_date'),
+  employmentStatus: varchar('employment_status', { length: 50 }),
+  terminationDate: date('termination_date'),
+  terminationReason: text('termination_reason'),
+  dateOfBirth: date('date_of_birth'),
+  idCardNumber: varchar('id_card_number', { length: 100 }),
+  emergencyContactName: varchar('emergency_contact_name', { length: 255 }),
+  emergencyContactPhone: varchar('emergency_contact_phone', { length: 20 }),
+  avatarUrl: text('avatar_url'),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+}, (table) => [
+  unique('uq_employment_profiles_membership').on(table.membershipId),
+]).enableRLS();
 
 // ─────────────────────────────────────────────────────────────────────────────
 // 4. PRODUCT_CATEGORIES – Danh mục sản phẩm & vật tư phân cấp
@@ -424,6 +605,7 @@ export const shiftSessions = pgTable('shift_sessions', {
   storeId: integer('store_id').references(() => stores.id, { onDelete: 'cascade' }).notNull(),
   userId: integer('user_id').references(() => users.id, { onDelete: 'set null' }),
   status: shiftStatusEnum('status').default('open').notNull(),
+  shiftCode: varchar('shift_code', { length: 10 }).default('A').notNull(), // Ca A, Ca B...
   openingCash: decimal('opening_cash', { precision: 12, scale: 2 }).default('0').notNull(),  // Tiền lẻ ban đầu
   closingCash: decimal('closing_cash', { precision: 12, scale: 2 }),                          // Tiền đếm thực tế khi đóng ca
   expectedCash: decimal('expected_cash', { precision: 12, scale: 2 }),                        // Hệ thống tính toán
@@ -607,9 +789,12 @@ export const orderDiscountApplications = pgTable('order_discount_applications', 
 // RELATIONS – Khai báo quan hệ cho Drizzle Query API
 // ─────────────────────────────────────────────────────────────────────────────
 
-export const tenantsRelations = relations(tenants, ({ many }) => ({
+export const tenantsRelations = relations(tenants, ({ one, many }) => ({
+  createdByAccount: one(users, { fields: [tenants.createdBy], references: [users.id], relationName: 'tenantCreator' }),
   stores: many(stores),
   users: many(users),
+  memberships: many(tenantMemberships),
+  joinRequests: many(tenantJoinRequests),
   storeJoinRequests: many(storeJoinRequests),
   productCategories: many(productCategories),
   products: many(products),
@@ -623,6 +808,8 @@ export const tenantsRelations = relations(tenants, ({ many }) => ({
 
 export const storesRelations = relations(stores, ({ one, many }) => ({
   tenant: one(tenants, { fields: [stores.tenantId], references: [tenants.id] }),
+  membershipStoreAccess: many(membershipStoreAccess),
+  requestedTenantJoinRequests: many(tenantJoinRequests, { relationName: 'tenantJoinRequestedStore' }),
   users: many(users),
   storeJoinRequests: many(storeJoinRequests),
   orders: many(orders),
@@ -632,6 +819,10 @@ export const storesRelations = relations(stores, ({ one, many }) => ({
 export const usersRelations = relations(users, ({ one, many }) => ({
   tenant: one(tenants, { fields: [users.tenantId], references: [tenants.id] }),
   store: one(stores, { fields: [users.storeId], references: [stores.id] }),
+  createdTenants: many(tenants, { relationName: 'tenantCreator' }),
+  memberships: many(tenantMemberships),
+  tenantJoinRequests: many(tenantJoinRequests, { relationName: 'tenantJoinRequester' }),
+  reviewedTenantJoinRequests: many(tenantJoinRequests, { relationName: 'tenantJoinReviewer' }),
   storeJoinRequests: many(storeJoinRequests),
   cashierOrders: many(orders),
   shiftSessions: many(shiftSessions),
@@ -642,6 +833,44 @@ export const storeJoinRequestsRelations = relations(storeJoinRequests, ({ one })
   store: one(stores, { fields: [storeJoinRequests.storeId], references: [stores.id] }),
   user: one(users, { fields: [storeJoinRequests.userId], references: [users.id] }),
   approver: one(users, { fields: [storeJoinRequests.approvedBy], references: [users.id] }),
+}));
+
+export const tenantMembershipsRelations = relations(tenantMemberships, ({ one, many }) => ({
+  tenant: one(tenants, { fields: [tenantMemberships.tenantId], references: [tenants.id] }),
+  user: one(users, { fields: [tenantMemberships.userId], references: [users.id] }),
+  storeAccess: many(membershipStoreAccess),
+  permissionOverrides: many(membershipPermissionOverrides),
+  employmentProfile: one(employmentProfiles),
+}));
+
+export const membershipStoreAccessRelations = relations(membershipStoreAccess, ({ one }) => ({
+  membership: one(tenantMemberships, { fields: [membershipStoreAccess.membershipId], references: [tenantMemberships.id] }),
+  store: one(stores, { fields: [membershipStoreAccess.storeId], references: [stores.id] }),
+}));
+
+export const permissionsRelations = relations(permissions, ({ many }) => ({
+  rolePermissions: many(rolePermissions),
+  membershipOverrides: many(membershipPermissionOverrides),
+}));
+
+export const rolePermissionsRelations = relations(rolePermissions, ({ one }) => ({
+  permission: one(permissions, { fields: [rolePermissions.permissionId], references: [permissions.id] }),
+}));
+
+export const membershipPermissionOverridesRelations = relations(membershipPermissionOverrides, ({ one }) => ({
+  membership: one(tenantMemberships, { fields: [membershipPermissionOverrides.membershipId], references: [tenantMemberships.id] }),
+  permission: one(permissions, { fields: [membershipPermissionOverrides.permissionId], references: [permissions.id] }),
+}));
+
+export const tenantJoinRequestsRelations = relations(tenantJoinRequests, ({ one }) => ({
+  tenant: one(tenants, { fields: [tenantJoinRequests.tenantId], references: [tenants.id] }),
+  user: one(users, { fields: [tenantJoinRequests.userId], references: [users.id], relationName: 'tenantJoinRequester' }),
+  requestedStore: one(stores, { fields: [tenantJoinRequests.requestedStoreId], references: [stores.id], relationName: 'tenantJoinRequestedStore' }),
+  reviewer: one(users, { fields: [tenantJoinRequests.reviewedBy], references: [users.id], relationName: 'tenantJoinReviewer' }),
+}));
+
+export const employmentProfilesRelations = relations(employmentProfiles, ({ one }) => ({
+  membership: one(tenantMemberships, { fields: [employmentProfiles.membershipId], references: [tenantMemberships.id] }),
 }));
 
 export const productCategoriesRelations = relations(productCategories, ({ one, many }) => ({
@@ -759,4 +988,3 @@ export const customersRelations = relations(customers, ({ one }) => ({
 export const orderDiscountApplicationsRelations = relations(orderDiscountApplications, ({ one }) => ({
   order: one(orders, { fields: [orderDiscountApplications.orderId], references: [orders.id] }),
 }));
-

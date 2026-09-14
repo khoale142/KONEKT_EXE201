@@ -125,6 +125,9 @@ export const authApi = {
     phone?: string;
   }) => api.post("/auth/register-staff", payload).then((r) => r.data),
 
+  registerAccount: (payload: { fullName: string; email: string; password: string; phone?: string }) =>
+    api.post('/auth/register-account', payload).then((r) => r.data),
+
   loginKonekt: (payload: { identifier: string; password: string }) =>
     api.post("/auth/login-konekt", payload).then((r) => r.data),
 

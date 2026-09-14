@@ -1,14 +1,19 @@
 import { pool } from "../../config/db";
 
-export async function findOpenReconciliationByStore(storeId: number) {
+/**
+ * 1. Tìm phiên ca đang mở của Store thuộc Tenant (Multi-tenant isolated)
+ */
+export async function findOpenReconciliationByStore(tenantId: number, storeId: number) {
   const r = await pool.query(
     `
       SELECT 
         s.id,
+        s.tenant_id,
         s.store_id,
+        s.membership_id AS opened_membership_id,
         s.id AS shift_session_id,
         TO_CHAR(s.opened_at, 'YYYY-MM-DD') AS work_date,
-        'A' AS shift_code,
+        COALESCE(s.shift_code, 'A') AS shift_code,
         s.opened_at AS scheduled_start_at,
         s.opened_at + INTERVAL '16 hours' AS scheduled_end_at,
         COALESCE(s.opening_cash, 0)::numeric AS opening_cash_amount,
@@ -29,45 +34,36 @@ export async function findOpenReconciliationByStore(storeId: number) {
         s.opened_at AS created_at,
         s.opened_at AS updated_at
       FROM public.shift_sessions s
-      WHERE s.store_id = $1
+      WHERE s.tenant_id = $1
+        AND s.store_id = $2
         AND s.status = 'open'
       ORDER BY s.opened_at DESC
       LIMIT 1
     `,
-    [storeId]
+    [tenantId, storeId]
   );
 
   return r.rows[0] || null;
 }
 
-export async function autoOpenDefaultShiftSession(storeId: number, userId?: number | null) {
-  const storeR = await pool.query(`SELECT id, tenant_id FROM public.stores WHERE id = $1 LIMIT 1`, [storeId]);
-  if (!storeR.rows[0]) return null;
-  const tenantId = storeR.rows[0].tenant_id;
-
-  await pool.query(
-    `
-      INSERT INTO public.shift_sessions (tenant_id, store_id, user_id, status, opening_cash, total_sales, total_orders, opened_at)
-      VALUES ($1, $2, $3, 'open', 0, 0, 0, NOW())
-    `,
-    [tenantId, storeId, userId || null]
-  );
-
-  return findOpenReconciliationByStore(storeId);
-}
-
+/**
+ * 2. Lấy thông tin chi tiết của 1 phiên ca theo ID
+ */
 export async function getReconciliationById(params: {
   id: number;
+  tenantId: number;
   storeId?: number;
 }) {
-  const values: any[] = [params.id];
+  const values: any[] = [params.id, params.tenantId];
   let sql = `
     SELECT 
       s.id,
+      s.tenant_id,
       s.store_id,
+      s.membership_id AS opened_membership_id,
       s.id AS shift_session_id,
       TO_CHAR(s.opened_at, 'YYYY-MM-DD') AS work_date,
-      'A' AS shift_code,
+      COALESCE(s.shift_code, 'A') AS shift_code,
       s.opened_at AS scheduled_start_at,
       s.opened_at + INTERVAL '16 hours' AS scheduled_end_at,
       COALESCE(s.opening_cash, 0)::numeric AS opening_cash_amount,
@@ -89,11 +85,12 @@ export async function getReconciliationById(params: {
       s.opened_at AS updated_at
     FROM public.shift_sessions s
     WHERE s.id = $1
+      AND s.tenant_id = $2
   `;
 
   if (params.storeId != null) {
     values.push(params.storeId);
-    sql += ` AND s.store_id = $2`;
+    sql += ` AND s.store_id = $3`;
   }
 
   sql += ` LIMIT 1`;
@@ -102,7 +99,11 @@ export async function getReconciliationById(params: {
   return r.rows[0] || null;
 }
 
+/**
+ * 3. Tạo mới một phiên mở ca bán hàng (Strictly Multi-Tenant)
+ */
 export async function createReconciliation(params: {
+  tenantId: number;
   storeId: number;
   shiftSessionId?: number | null;
   workDate: string;
@@ -111,55 +112,74 @@ export async function createReconciliation(params: {
   scheduledEndAt: string;
   openingCashAmount: number;
   openedBy?: number | null;
+  membershipId?: number | null;
   note?: string | null;
 }) {
-  const storeR = await pool.query(`SELECT tenant_id FROM public.stores WHERE id = $1 LIMIT 1`, [params.storeId]);
-  const tenantId = storeR.rows[0]?.tenant_id || 1;
-
   const r = await pool.query(
     `
-      INSERT INTO public.shift_sessions(
+      INSERT INTO public.shift_sessions (
         tenant_id,
         store_id,
         user_id,
+        membership_id,
         status,
+        shift_code,
         opening_cash,
+        total_sales,
+        total_orders,
         notes,
         opened_at
       )
-      VALUES ($1, $2, $3, 'open', $4, $5, NOW())
-      RETURNING 
+      VALUES ($1, $2, $3, $4, 'open', $5, $6, 0, 0, $7, NOW())
+      RETURNING
         id,
+        tenant_id,
         store_id,
+        membership_id AS opened_membership_id,
         id AS shift_session_id,
-        $6::text AS work_date,
-        $7::text AS shift_code,
-        $8::timestamp with time zone AS scheduled_start_at,
-        $9::timestamp with time zone AS scheduled_end_at,
+        TO_CHAR(opened_at, 'YYYY-MM-DD') AS work_date,
+        shift_code,
+        opened_at AS scheduled_start_at,
+        opened_at + INTERVAL '16 hours' AS scheduled_end_at,
         opening_cash AS opening_cash_amount,
+        0::numeric AS expected_cash_amount,
+        0::numeric AS expected_transfer_amount,
+        0::numeric AS expected_total_amount,
+        NULL::numeric AS actual_cash_amount,
+        0::numeric AS variance_cash_amount,
+        0::int AS total_orders,
+        0::int AS cash_order_count,
+        0::int AS transfer_order_count,
         user_id AS opened_by,
+        user_id AS closed_by,
         notes AS note,
         opened_at AS started_at,
-        status
+        closed_at,
+        status,
+        opened_at AS created_at,
+        opened_at AS updated_at
     `,
     [
-      tenantId,
+      params.tenantId,
       params.storeId,
       params.openedBy ?? null,
+      params.membershipId ?? null,
+      params.shiftCode,
       params.openingCashAmount,
       params.note ?? null,
-      params.workDate,
-      params.shiftCode,
-      params.scheduledStartAt,
-      params.scheduledEndAt,
     ]
   );
 
   return r.rows[0];
 }
 
+/**
+ * 4. Đóng phiên ca và cập nhật kết quả kiểm két
+ */
 export async function closeReconciliation(params: {
   id: number;
+  tenantId: number;
+  storeId: number;
   closedBy?: number | null;
   actualCashAmount: number;
   expectedCashAmount: number;
@@ -175,19 +195,49 @@ export async function closeReconciliation(params: {
     `
       UPDATE public.shift_sessions
       SET
-        closing_cash = $2,
-        expected_cash = $3,
-        cash_difference = $4,
-        total_sales = $5,
-        total_orders = $6,
-        notes = COALESCE($7, notes),
+        closing_cash = $4,
+        expected_cash = $5,
+        cash_difference = $6,
+        total_sales = $7,
+        total_orders = $8,
+        notes = COALESCE($9, notes),
         closed_at = NOW(),
         status = 'closed'
       WHERE id = $1
-      RETURNING *
+        AND tenant_id = $2
+        AND store_id = $3
+      RETURNING
+        id,
+        tenant_id,
+        store_id,
+        membership_id AS opened_membership_id,
+        id AS shift_session_id,
+        TO_CHAR(opened_at, 'YYYY-MM-DD') AS work_date,
+        COALESCE(shift_code, 'A') AS shift_code,
+        opened_at AS scheduled_start_at,
+        opened_at + INTERVAL '16 hours' AS scheduled_end_at,
+        COALESCE(opening_cash, 0)::numeric AS opening_cash_amount,
+        COALESCE(expected_cash, 0)::numeric AS expected_cash_amount,
+        0::numeric AS expected_transfer_amount,
+        COALESCE(total_sales, 0)::numeric AS expected_total_amount,
+        closing_cash AS actual_cash_amount,
+        COALESCE(cash_difference, 0)::numeric AS variance_cash_amount,
+        COALESCE(total_orders, 0)::int AS total_orders,
+        0::int AS cash_order_count,
+        0::int AS transfer_order_count,
+        opened_at AS started_at,
+        closed_at,
+        user_id AS opened_by,
+        user_id AS closed_by,
+        status,
+        notes AS note,
+        opened_at AS created_at,
+        closed_at AS updated_at
     `,
     [
       params.id,
+      params.tenantId,
+      params.storeId,
       params.actualCashAmount,
       params.expectedCashAmount,
       params.varianceCashAmount,
@@ -200,7 +250,11 @@ export async function closeReconciliation(params: {
   return r.rows[0] || null;
 }
 
+/**
+ * 5. Danh sách lịch sử các phiên ca (lọc tenant_id + store_id)
+ */
 export async function listReconciliations(params: {
+  tenantId: number;
   storeId: number;
   dateFrom?: string;
   dateTo?: string;
@@ -209,12 +263,27 @@ export async function listReconciliations(params: {
   limit?: number;
   offset?: number;
 }) {
-  const values: any[] = [params.storeId];
-  const where: string[] = [`s.store_id = $1`];
+  const values: any[] = [params.tenantId, params.storeId];
+  const where: string[] = [`s.tenant_id = $1`, `s.store_id = $2`];
 
   if (params.status) {
     values.push(params.status);
     where.push(`s.status = $${values.length}`);
+  }
+
+  if (params.shiftCode) {
+    values.push(params.shiftCode);
+    where.push(`s.shift_code = $${values.length}`);
+  }
+
+  if (params.dateFrom) {
+    values.push(`${params.dateFrom} 00:00:00+07`);
+    where.push(`s.opened_at >= $${values.length}::timestamptz`);
+  }
+
+  if (params.dateTo) {
+    values.push(`${params.dateTo} 23:59:59+07`);
+    where.push(`s.opened_at <= $${values.length}::timestamptz`);
   }
 
   values.push(params.limit ?? 50);
@@ -227,10 +296,12 @@ export async function listReconciliations(params: {
     `
       SELECT 
         s.id,
+        s.tenant_id,
         s.store_id,
+        s.membership_id AS opened_membership_id,
         s.id AS shift_session_id,
         TO_CHAR(s.opened_at, 'YYYY-MM-DD') AS work_date,
-        'A' AS shift_code,
+        COALESCE(s.shift_code, 'A') AS shift_code,
         s.opened_at AS scheduled_start_at,
         s.opened_at + INTERVAL '16 hours' AS scheduled_end_at,
         COALESCE(s.opening_cash, 0)::numeric AS opening_cash_amount,
@@ -249,7 +320,7 @@ export async function listReconciliations(params: {
         s.status,
         s.notes AS note,
         s.opened_at AS created_at,
-        s.opened_at AS updated_at
+        COALESCE(s.closed_at, s.opened_at) AS updated_at
       FROM public.shift_sessions s
       WHERE ${where.join(" AND ")}
       ORDER BY s.opened_at DESC, s.id DESC
@@ -269,30 +340,37 @@ export async function findOpenInventoryShiftSession(_params: {
   return null;
 }
 
-export async function getStoreMeta(storeId: number) {
+/**
+ * 6. Lấy metadata của Store
+ */
+export async function getStoreMeta(tenantId: number, storeId: number) {
   const r = await pool.query(
     `
       SELECT id, COALESCE(invite_code, 'STORE-' || id) AS code, name, address
       FROM public.stores
-      WHERE id = $1
+      WHERE id = $1 AND tenant_id = $2
       LIMIT 1
     `,
-    [storeId]
+    [storeId, tenantId]
   );
 
   return r.rows[0] || null;
 }
 
+/**
+ * 7. Thống kê tổng hợp doanh thu trong phiên ca (Multi-Tenant)
+ */
 export async function getReconciliationSummary(params: {
   reconciliationId: number;
+  tenantId: number;
   storeId?: number;
 }) {
-  const values: any[] = [params.reconciliationId];
+  const values: any[] = [params.reconciliationId, params.tenantId];
   let storeFilter = "";
 
   if (params.storeId != null) {
     values.push(params.storeId);
-    storeFilter = ` AND s.store_id = $2`;
+    storeFilter = ` AND s.store_id = $3`;
   }
 
   const r = await pool.query(
@@ -300,6 +378,7 @@ export async function getReconciliationSummary(params: {
       WITH base AS (
         SELECT
           s.id,
+          s.tenant_id,
           s.store_id,
           TO_CHAR(s.opened_at, 'YYYY-MM-DD') AS work_date,
           COALESCE(s.opening_cash, 0)::numeric AS opening_cash_amount,
@@ -307,7 +386,8 @@ export async function getReconciliationSummary(params: {
           COALESCE(s.closed_at, NOW()) AS end_at
         FROM public.shift_sessions s
         WHERE s.id = $1
-        ${storeFilter}
+          AND s.tenant_id = $2
+          ${storeFilter}
       ),
 
       payments_agg AS (
@@ -332,7 +412,8 @@ export async function getReconciliationSummary(params: {
           0::int AS other_payment_count
         FROM base
         LEFT JOIN public.orders o
-          ON o.store_id = base.store_id
+          ON o.tenant_id = base.tenant_id
+         AND o.store_id = base.store_id
          AND o.created_at >= base.started_at
          AND o.created_at <= base.end_at
          AND o.status::text IN ('completed', 'ready', 'confirmed')
@@ -354,7 +435,8 @@ export async function getReconciliationSummary(params: {
           0::numeric AS special_value
         FROM base
         LEFT JOIN public.orders o
-          ON o.store_id = base.store_id
+          ON o.tenant_id = base.tenant_id
+         AND o.store_id = base.store_id
          AND o.created_at >= base.started_at
          AND o.created_at <= base.end_at
          AND o.status::text IN ('completed', 'ready', 'confirmed')
@@ -407,16 +489,20 @@ export async function getReconciliationSummary(params: {
   return r.rows[0] || null;
 }
 
+/**
+ * 8. Danh sách thanh toán chi tiết trong ca
+ */
 export async function getReconciliationPayments(params: {
   reconciliationId: number;
+  tenantId: number;
   storeId?: number;
 }) {
-  const values: any[] = [params.reconciliationId];
+  const values: any[] = [params.reconciliationId, params.tenantId];
   let storeFilter = "";
 
   if (params.storeId != null) {
     values.push(params.storeId);
-    storeFilter = ` AND s.store_id = $2`;
+    storeFilter = ` AND s.store_id = $3`;
   }
 
   const r = await pool.query(
@@ -424,12 +510,14 @@ export async function getReconciliationPayments(params: {
       WITH base AS (
         SELECT
           s.id,
+          s.tenant_id,
           s.store_id,
           s.opened_at AS started_at,
           COALESCE(s.closed_at, NOW()) AS end_at
         FROM public.shift_sessions s
         WHERE s.id = $1
-        ${storeFilter}
+          AND s.tenant_id = $2
+          ${storeFilter}
       )
       SELECT
         p.id,
@@ -446,7 +534,8 @@ export async function getReconciliationPayments(params: {
         o.cashier_id AS staff_id
       FROM base
       JOIN public.orders o
-        ON o.store_id = base.store_id
+        ON o.tenant_id = base.tenant_id
+       AND o.store_id = base.store_id
        AND o.created_at >= base.started_at
        AND o.created_at <= base.end_at
       JOIN public.payments p
@@ -461,6 +550,7 @@ export async function getReconciliationPayments(params: {
 
 export async function getReconciliationSpecialOrders(_params: {
   reconciliationId: number;
+  tenantId: number;
   storeId?: number;
 }): Promise<any[]> {
   return [];

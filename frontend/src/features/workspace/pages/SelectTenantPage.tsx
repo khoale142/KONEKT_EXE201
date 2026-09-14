@@ -5,7 +5,6 @@ import {
   Plus,
   KeyRound,
   Building2,
-  CheckCircle2,
   Clock,
   ArrowRight,
   MapPin,
@@ -19,7 +18,7 @@ import {
   workspaceApi,
   WorkspaceTenant,
   PendingStoreRequest,
-  VerifiedStoreInvite,
+
 } from "../api/workspace.api";
 import { useAuthStore } from "../../../app/store/auth.store";
 
@@ -42,19 +41,6 @@ export default function SelectTenantPage() {
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
 
-  // Modal State: Kích hoạt mã mời Store (Internal Member / Partner)
-  const [showInviteModal, setShowInviteModal] = useState(false);
-  const [inviteCode, setInviteCode] = useState("");
-  const [verifyingCode, setVerifyingCode] = useState(false);
-  const [verifiedStore, setVerifiedStore] = useState<VerifiedStoreInvite | null>(null);
-  const [fullName, setFullName] = useState(user?.fullName || "");
-  const [phone, setPhone] = useState("");
-  const [desiredPosition, setDesiredPosition] = useState("Nhân viên vận hành");
-  const [note, setNote] = useState("");
-  const [joining, setJoining] = useState(false);
-  const [inviteError, setInviteError] = useState<string | null>(null);
-  const [inviteSuccess, setInviteSuccess] = useState<string | null>(null);
-
   const loadWorkspaces = async () => {
     try {
       setLoading(true);
@@ -76,12 +62,17 @@ export default function SelectTenantPage() {
   const handleSelectTenant = async (tenant: WorkspaceTenant) => {
     try {
       setLoading(true);
-      const data = await workspaceApi.selectTenant({ tenantId: tenant.tenantId });
+      const data = await workspaceApi.selectTenant({ tenantId: tenant.tenantId, membershipId: tenant.membershipId });
       setTokensAndUser(data.accessToken, data.refreshToken, data.user);
 
+      if (data.user?.authMode === "canonical" && !data.user?.storeId) {
+        navigate("/workspace/select-store", { replace: true, state: { tenant } });
+        return;
+      }
+
       // Nếu chỉ có 1 store và là staff/pos -> vào thẳng POS
-      if (tenant.role === "staff" && tenant.stores.length === 1) {
-        navigate("/pos/order", { replace: true });
+      if (["staff", "shift_leader", "store_manager"].includes(tenant.role)) {
+        navigate(tenant.role === "store_manager" ? "/store/manager" : "/store/staff", { replace: true });
         return;
       }
 
@@ -117,60 +108,6 @@ export default function SelectTenantPage() {
       setCreateError(err?.response?.data?.message || "Không thể tạo thương hiệu mới");
     } finally {
       setCreating(false);
-    }
-  };
-
-  const handleVerifyInviteCode = async () => {
-    if (!inviteCode.trim()) return;
-    try {
-      setVerifyingCode(true);
-      setInviteError(null);
-      const store = await workspaceApi.verifyStoreInvite(inviteCode.trim());
-      setVerifiedStore(store);
-    } catch (err: any) {
-      setVerifiedStore(null);
-      setInviteError(err?.response?.data?.message || "Mã mời chi nhánh không hợp lệ");
-    } finally {
-      setVerifyingCode(false);
-    }
-  };
-
-  const handleJoinStore = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!verifiedStore) {
-      setInviteError("Vui lòng kiểm tra mã mời cửa hàng trước khi gửi yêu cầu");
-      return;
-    }
-    if (!fullName.trim()) {
-      setInviteError("Vui lòng nhập họ và tên của bạn");
-      return;
-    }
-
-    try {
-      setJoining(true);
-      setInviteError(null);
-      await workspaceApi.submitJoinStoreRequest({
-        storeInviteCode: verifiedStore.inviteCode,
-        fullName: fullName.trim(),
-        phone: phone.trim() || undefined,
-        desiredPosition: desiredPosition.trim() || undefined,
-        note: note.trim() || undefined,
-      });
-
-      setInviteSuccess(
-        `Đã gửi yêu cầu gia nhập chi nhánh "${verifiedStore.storeName}" thành công! Vui lòng đợi Chủ quán duyệt.`
-      );
-      setTimeout(() => {
-        setShowInviteModal(false);
-        setInviteSuccess(null);
-        setVerifiedStore(null);
-        setInviteCode("");
-        void loadWorkspaces();
-      }, 1800);
-    } catch (err: any) {
-      setInviteError(err?.response?.data?.message || "Không thể gửi yêu cầu gia nhập");
-    } finally {
-      setJoining(false);
     }
   };
 
@@ -329,9 +266,7 @@ export default function SelectTenantPage() {
             <button
               type="button"
               onClick={() => {
-                setShowInviteModal(true);
-                setInviteError(null);
-                setVerifiedStore(null);
+                navigate("/workspace/join-store-invite");
               }}
               style={{
                 display: "inline-flex",
@@ -352,7 +287,7 @@ export default function SelectTenantPage() {
               onMouseLeave={(e) => (e.currentTarget.style.borderColor = "#D1DBD2")}
             >
               <KeyRound size={16} strokeWidth={2.3} color="#3D503C" />
-              Kích hoạt mã mời Store
+              Tham gia cửa hàng bằng mã
             </button>
 
             <button
@@ -491,7 +426,7 @@ export default function SelectTenantPage() {
               </button>
               <button
                 type="button"
-                onClick={() => setShowInviteModal(true)}
+                onClick={() => navigate("/workspace/join-store-invite")}
                 style={{
                   display: "inline-flex",
                   alignItems: "center",
@@ -507,7 +442,7 @@ export default function SelectTenantPage() {
                 }}
               >
                 <KeyRound size={18} />
-                Kích hoạt mã mời Store
+                Tham gia cửa hàng bằng mã
               </button>
             </div>
           </div>
@@ -621,6 +556,7 @@ export default function SelectTenantPage() {
                     >
                       Mã chuỗi: <code style={{ background: "#F4EFEB", padding: "1px 6px", borderRadius: 4 }}>{t.tenantCode}</code>
                     </div>
+                    {isOwnerRole && <button type="button" onClick={() => navigate('/workspace/tenant-join-requests')} style={{ marginBottom: 16, padding: '8px 10px', borderRadius: 8, border: '1px solid #D1DBD2', background: '#F4EFEB', color: '#364D39', fontWeight: 700, cursor: 'pointer' }}>Yêu cầu gia nhập cửa hàng</button>}
 
                     {/* Stores Count summary */}
                     <div
@@ -691,7 +627,7 @@ export default function SelectTenantPage() {
               }}
             >
               <Clock size={18} />
-              Yêu Cầu Gia Nhập Đang Chờ Chủ Quán Duyệt ({pendingRequests.length})
+              Yêu cầu tham gia đang chờ chủ doanh nghiệp duyệt ({pendingRequests.length})
             </div>
 
             <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
@@ -712,11 +648,13 @@ export default function SelectTenantPage() {
                 >
                   <div>
                     <div style={{ fontWeight: 800, fontSize: "1rem", color: "#92400E", marginBottom: 3 }}>
-                      {req.tenantName} — {req.storeName}
+                      {req.tenantName}{req.storeName ? ` — ${req.storeName}` : ""}
                     </div>
                     <div style={{ fontSize: "0.82rem", color: "#78350F" }}>
-                      Vị trí đăng ký: <strong>{req.desiredPosition || "Nhân sự"}</strong>
-                      {req.storeAddress ? ` · Địa chỉ: ${req.storeAddress}` : ""}
+                      {req.storeName ? <>
+                        Yêu cầu tham gia đã được gửi · Cửa hàng được mời: <strong>{req.storeName}</strong>
+                        {req.storeAddress ? ` · Địa chỉ: ${req.storeAddress}` : ""}
+                      </> : <>Yêu cầu tham gia doanh nghiệp đã được gửi. Khi Chủ doanh nghiệp duyệt, hãy tải lại danh sách Workspace để chọn doanh nghiệp mới.</>}
                     </div>
                   </div>
 
@@ -929,311 +867,6 @@ export default function SelectTenantPage() {
         </div>
       )}
 
-      {/* MODAL 2: Kích Hoạt Mã Mời Store (Internal Member / Partner) */}
-      {showInviteModal && (
-        <div
-          style={{
-            position: "fixed",
-            inset: 0,
-            background: "rgba(0, 0, 0, 0.5)",
-            backdropFilter: "blur(3px)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            zIndex: 100,
-            padding: 20,
-          }}
-        >
-          <div
-            style={{
-              background: "#FAF6F3",
-              border: "1px solid #E8E0D5",
-              borderRadius: 16,
-              maxWidth: 520,
-              width: "100%",
-              padding: "32px 28px",
-              boxShadow: "0 20px 40px rgba(0,0,0,0.18)",
-              position: "relative",
-            }}
-          >
-            <button
-              type="button"
-              onClick={() => setShowInviteModal(false)}
-              style={{
-                position: "absolute",
-                top: 18,
-                right: 18,
-                border: "none",
-                background: "transparent",
-                color: "#687668",
-                cursor: "pointer",
-              }}
-            >
-              <X size={20} />
-            </button>
-
-            <div style={{ textAlign: "center", marginBottom: 20 }}>
-              <div
-                style={{
-                  width: 48,
-                  height: 48,
-                  borderRadius: 12,
-                  background: "#3D503C",
-                  color: "#FAF6F3",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  margin: "0 auto 12px",
-                }}
-              >
-                <KeyRound size={22} />
-              </div>
-              <h2 style={{ fontSize: "1.35rem", fontWeight: 800, margin: 0, color: "#2A3B2C" }}>
-                Kích Hoạt Mã Mời Chi Nhánh
-              </h2>
-              <p style={{ color: "#687668", fontSize: "0.85rem", marginTop: 4 }}>
-                Nhập mã mời nội bộ từ Cửa hàng trưởng để gửi yêu cầu kích hoạt tài khoản làm việc.
-              </p>
-            </div>
-
-            {inviteSuccess ? (
-              <div
-                style={{
-                  background: "#F0FDF4",
-                  border: "1px solid #BBF7D0",
-                  color: "#166534",
-                  padding: "16px",
-                  borderRadius: 10,
-                  fontSize: "0.92rem",
-                  fontWeight: 600,
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 10,
-                }}
-              >
-                <CheckCircle2 size={20} />
-                {inviteSuccess}
-              </div>
-            ) : (
-              <form onSubmit={handleJoinStore} style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-                {inviteError && (
-                  <div
-                    style={{
-                      background: "#FEF2F2",
-                      border: "1px solid #FCA5A5",
-                      color: "#991B1B",
-                      padding: "10px 14px",
-                      borderRadius: 8,
-                      fontSize: "0.84rem",
-                      fontWeight: 600,
-                    }}
-                  >
-                    {inviteError}
-                  </div>
-                )}
-
-                {/* Step 1: Nhập mã store */}
-                <div>
-                  <label style={{ display: "block", fontSize: "0.82rem", fontWeight: 700, marginBottom: 5 }}>
-                    Mã mời Store (Do quản lý cung cấp) <span style={{ color: "#DC2626" }}>*</span>
-                  </label>
-                  <div style={{ display: "flex", gap: 8 }}>
-                    <input
-                      type="text"
-                      placeholder="Ví dụ: STR-001-A1B2"
-                      value={inviteCode}
-                      onChange={(e) => {
-                        setInviteCode(e.target.value.toUpperCase());
-                        setVerifiedStore(null);
-                      }}
-                      required
-                      style={{
-                        flex: 1,
-                        padding: "10px 14px",
-                        borderRadius: 8,
-                        border: "1px solid #D1DBD2",
-                        fontSize: "0.95rem",
-                        fontFamily: "monospace",
-                        fontWeight: 700,
-                        textTransform: "uppercase",
-                        outline: "none",
-                        boxSizing: "border-box",
-                      }}
-                    />
-                    <button
-                      type="button"
-                      disabled={verifyingCode || !inviteCode.trim()}
-                      onClick={handleVerifyInviteCode}
-                      style={{
-                        padding: "10px 16px",
-                        borderRadius: 8,
-                        border: "1px solid #3D503C",
-                        background: "#3D503C",
-                        color: "#FFFFFF",
-                        fontSize: "0.85rem",
-                        fontWeight: 700,
-                        cursor: verifyingCode ? "not-allowed" : "pointer",
-                      }}
-                    >
-                      {verifyingCode ? "Kiểm tra..." : "Kiểm tra"}
-                    </button>
-                  </div>
-                </div>
-
-                {/* Preview Chi nhánh sau khi verify */}
-                {verifiedStore && (
-                  <div
-                    style={{
-                      background: "#FFFFFF",
-                      border: "1px solid #C4D6C6",
-                      borderRadius: 10,
-                      padding: "14px 16px",
-                    }}
-                  >
-                    <div style={{ display: "flex", alignItems: "center", gap: 6, color: "#166534", fontSize: "0.8rem", fontWeight: 700, marginBottom: 4 }}>
-                      <CheckCircle2 size={16} />
-                      Mã hợp lệ — Đã xác định cơ sở:
-                    </div>
-                    <div style={{ fontSize: "1.05rem", fontWeight: 800, color: "#2A3B2C" }}>
-                      {verifiedStore.tenantName} · {verifiedStore.storeName}
-                    </div>
-                    {verifiedStore.storeAddress && (
-                      <div style={{ fontSize: "0.8rem", color: "#687668", marginTop: 2 }}>
-                        {verifiedStore.storeAddress}
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                {/* Thông tin nhân sự */}
-                <div>
-                  <label style={{ display: "block", fontSize: "0.82rem", fontWeight: 700, marginBottom: 5 }}>
-                    Họ và tên của bạn <span style={{ color: "#DC2626" }}>*</span>
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="Nguyễn Văn A"
-                    value={fullName}
-                    onChange={(e) => setFullName(e.target.value)}
-                    required
-                    style={{
-                      width: "100%",
-                      padding: "10px 14px",
-                      borderRadius: 8,
-                      border: "1px solid #D1DBD2",
-                      fontSize: "0.92rem",
-                      outline: "none",
-                      boxSizing: "border-box",
-                    }}
-                  />
-                </div>
-
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-                  <div>
-                    <label style={{ display: "block", fontSize: "0.82rem", fontWeight: 700, marginBottom: 5 }}>
-                      Số điện thoại
-                    </label>
-                    <input
-                      type="text"
-                      placeholder="09..."
-                      value={phone}
-                      onChange={(e) => setPhone(e.target.value)}
-                      style={{
-                        width: "100%",
-                        padding: "10px 14px",
-                        borderRadius: 8,
-                        border: "1px solid #D1DBD2",
-                        fontSize: "0.92rem",
-                        outline: "none",
-                        boxSizing: "border-box",
-                      }}
-                    />
-                  </div>
-
-                  <div>
-                    <label style={{ display: "block", fontSize: "0.82rem", fontWeight: 700, marginBottom: 5 }}>
-                      Vị trí đảm nhận
-                    </label>
-                    <input
-                      type="text"
-                      placeholder="Thu ngân, Pha chế..."
-                      value={desiredPosition}
-                      onChange={(e) => setDesiredPosition(e.target.value)}
-                      style={{
-                        width: "100%",
-                        padding: "10px 14px",
-                        borderRadius: 8,
-                        border: "1px solid #D1DBD2",
-                        fontSize: "0.92rem",
-                        outline: "none",
-                        boxSizing: "border-box",
-                      }}
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <label style={{ display: "block", fontSize: "0.82rem", fontWeight: 700, marginBottom: 5 }}>
-                    Ghi chú / Lời nhắn tới Chủ quán
-                  </label>
-                  <textarea
-                    placeholder="Ví dụ: Đã trao đổi qua phỏng vấn ngày hôm qua..."
-                    value={note}
-                    onChange={(e) => setNote(e.target.value)}
-                    rows={2}
-                    style={{
-                      width: "100%",
-                      padding: "8px 12px",
-                      borderRadius: 8,
-                      border: "1px solid #D1DBD2",
-                      fontSize: "0.9rem",
-                      outline: "none",
-                      boxSizing: "border-box",
-                      resize: "none",
-                    }}
-                  />
-                </div>
-
-                <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, marginTop: 8 }}>
-                  <button
-                    type="button"
-                    onClick={() => setShowInviteModal(false)}
-                    style={{
-                      padding: "10px 16px",
-                      borderRadius: 8,
-                      border: "1px solid #D1DBD2",
-                      background: "#FFFFFF",
-                      fontWeight: 600,
-                      cursor: "pointer",
-                    }}
-                  >
-                    Hủy
-                  </button>
-                  <button
-                    type="submit"
-                    disabled={joining || !verifiedStore}
-                    style={{
-                      padding: "10px 20px",
-                      borderRadius: 8,
-                      border: "none",
-                      background: "#3D503C",
-                      color: "#FFFFFF",
-                      fontWeight: 700,
-                      cursor: joining || !verifiedStore ? "not-allowed" : "pointer",
-                      display: "inline-flex",
-                      alignItems: "center",
-                      gap: 8,
-                    }}
-                  >
-                    {joining && <RefreshCw size={15} className="animate-spin" />}
-                    {joining ? "Đang gửi..." : "Gửi yêu cầu kích hoạt"}
-                  </button>
-                </div>
-              </form>
-            )}
-          </div>
-        </div>
-      )}
     </div>
   );
 }

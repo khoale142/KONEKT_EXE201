@@ -80,3 +80,7 @@
 - [x] **AC-6 (Shift Leader Portal)**: Tài khoản role `shift_leader` nhìn thấy thêm các chức năng: Kiểm quỹ & Bàn giao ca (`/pos/shift-reconciliation`), Duyệt phiếu kiểm kho ca, Duyệt phiếu nhập hàng ca.
 - [x] **AC-7 (Store Manager Portal)**: Tài khoản role `store_manager` được chuyển hướng vào `/store/manager` với đầy đủ quyền Phân ca, Duyệt đổi ca, Báo cáo doanh thu, Quản lý nhân viên chi nhánh.
 - [x] **AC-8 (Design & Rules Compliance)**: 100% sử dụng icon từ `lucide-react` (không có emoji unicode), tuân thủ bảng màu xanh rêu sáng `#3D5E46` & kem latte `#FAF7F2`, `tsc` build thành công 0 lỗi.
+
+
+## Nghiệm thu bổ sung ngày 12/09/2026
+Trạng thái Completed phía trên là lịch sử PLAN-15. Luồng tài khoản mới đã được sửa và kiểm thử API trong [REQ-15B](REQ-15B_OWNER_STORE_INVITES_AND_STAFF_ACTIVATION.md); xem [VERIFY-15B](../Developing/logs/VERIFY-15B_STAFF_ONBOARDING.md). Kiểm thử trình duyệt hai phiên và F5 còn chờ vì môi trường không có browser khả dụng.

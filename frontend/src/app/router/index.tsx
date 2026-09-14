@@ -1,3 +1,4 @@
+import RequireAuth from './guards/RequireAuth';
 import {
   createBrowserRouter,
   RouterProvider,
@@ -13,8 +14,7 @@ import { useAuthStore } from "../../app/store/auth.store";
 import PortalSelectPage from "../../features/auth/pages/PortalSelectPage";
 import CustomerLoginPage from "../../features/auth/pages/CustomerLoginPage";
 import CustomerRegisterPage from "../../features/auth/pages/CustomerRegisterPage";
-import OwnerRegisterPage from "../../features/auth/pages/OwnerRegisterPage";
-import StaffRegisterPage from "../../features/auth/pages/StaffRegisterPage";
+import AccountRegisterPage from "../../features/auth/pages/AccountRegisterPage";
 import StaffJoinStorePage from "../../features/workspace/pages/StaffJoinStorePage";
 import CustomerForgotPasswordPage from "../../features/auth/pages/CustomerForgotPasswordPage";
 import CustomerResetOtpPage from "../../features/auth/pages/CustomerResetOtpPage";
@@ -30,6 +30,8 @@ import PosLoginPage from "../../features/auth/pages/PosLoginPage";
 import MerchantLoginPage from "../../features/auth/pages/MerchantLoginPage";
 import SelectTenantPage from "../../features/workspace/pages/SelectTenantPage";
 import SelectStorePage from "../../features/workspace/pages/SelectStorePage";
+import TenantJoinPage from "../../features/workspace/pages/TenantJoinPage";
+import TenantJoinRequestsPage from "../../features/workspace/pages/TenantJoinRequestsPage";
 import OwnerMenuHubPage from "../../features/owner-menu/pages/OwnerMenuHubPage";
 import OwnerInventoryHubPage from "../../features/owner-inventory/pages/OwnerInventoryHubPage";
 import OwnerPromotionsHubPage from "../../features/owner-promotions/pages/OwnerPromotionsHubPage";
@@ -294,15 +296,24 @@ const router = createBrowserRouter([
 
   {
     path: "/workspace/select-tenant",
-    element: <SelectTenantPage />,
+    element: <RequireAuth><SelectTenantPage /></RequireAuth>,
   },
   {
     path: "/workspace/select-store",
-    element: <SelectStorePage />,
+    element: <RequireAuth><SelectStorePage /></RequireAuth>,
   },
   {
     path: "/workspace/join-store",
-    element: <StaffJoinStorePage />,
+    element: <RequireAuth><StaffJoinStorePage /></RequireAuth>,
+  },
+  {
+    path: "/workspace/join-store-invite",
+    element: <RequireAuth><TenantJoinPage /></RequireAuth>,
+  },
+  { path: "/workspace/join-tenant", element: <Navigate to="/workspace/join-store-invite" replace /> },
+  {
+    path: "/workspace/tenant-join-requests",
+    element: <RequireAuth><TenantJoinRequestsPage /></RequireAuth>,
   },
   {
     path: "/login",
@@ -321,12 +332,16 @@ const router = createBrowserRouter([
     ),
   },
   {
+    path: "/register/account",
+    element: <AccountRegisterPage />,
+  },
+  {
     path: "/register/owner",
-    element: <OwnerRegisterPage />,
+    element: <Navigate to="/register/account" replace />,
   },
   {
     path: "/register/staff",
-    element: <StaffRegisterPage />,
+    element: <Navigate to="/register/account" replace />,
   },
   {
     path: "/register/customer",

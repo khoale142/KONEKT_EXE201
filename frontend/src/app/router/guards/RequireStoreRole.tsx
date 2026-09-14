@@ -24,6 +24,7 @@ export default function RequireStoreRole({
   if (!hydrated) return null;
   if (!user) return <Navigate to="/" replace />;
 
+  if (user.requireStoreJoin || user.scope === "onboarding") return <Navigate to="/workspace/join-store" replace />;
   const roles = user.roles || [];
 
   // Owner & Platform Admin bypass portal + role checks

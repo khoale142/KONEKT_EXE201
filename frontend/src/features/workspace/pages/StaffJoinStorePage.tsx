@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { workspaceApi, VerifiedStoreInvite } from "../api/workspace.api";
 import { useAuthStore } from "../../../app/store/auth.store";
@@ -18,7 +18,11 @@ export default function StaffJoinStorePage() {
   const navigate = useNavigate();
   const user = useAuthStore((s) => s.user);
   const logout = useAuthStore((s) => s.logout);
-  const hydrateFromStorage = useAuthStore((s) => s.hydrateFromStorage);
+  const setTokensAndUser = useAuthStore((s) => s.setTokensAndUser);
+  const statusBusy = useRef(false);
+  const [statusLoaded, setStatusLoaded] = useState(false);
+  const [statusError, setStatusError] = useState("");
+  const [rejectedReason, setRejectedReason] = useState("");
 
   const [inviteCodeInput, setInviteCodeInput] = useState("");
   const [verifying, setVerifying] = useState(false);
@@ -43,7 +47,7 @@ export default function StaffJoinStorePage() {
 
   // Nếu user đã có storeId và tenantId rồi, chuyển thẳng vào store staff
   useEffect(() => {
-    if (user?.storeId && user?.tenantId) {
+    if (user?.storeId && user?.tenantId && !user.requireStoreJoin && user.scope !== 'onboarding') {
       if (user.roles?.includes("store_manager")) {
         navigate("/store/manager", { replace: true });
       } else {
@@ -51,18 +55,6 @@ export default function StaffJoinStorePage() {
       }
     }
   }, [user, navigate]);
-
-  // Kiểm tra nếu có pendingRequest từ login payload
-  useEffect(() => {
-    const rawPending = (user as any)?.pendingRequest;
-    if (rawPending) {
-      setPendingReqInfo({
-        storeName: rawPending.storeName,
-        desiredPosition: rawPending.desiredPosition,
-        createdAt: rawPending.createdAt,
-      });
-    }
-  }, [user]);
 
   const handleVerifyCode = async (codeToVerify?: string) => {
     const code = (codeToVerify || inviteCodeInput).trim().toUpperCase();
@@ -113,6 +105,7 @@ export default function StaffJoinStorePage() {
         note: note.trim() || undefined,
       });
 
+      setRejectedReason("");
       setPendingReqInfo({
         storeName: verifiedStore.storeName,
         desiredPosition: pos,
@@ -128,27 +121,30 @@ export default function StaffJoinStorePage() {
   };
 
   const handleRefreshStatus = async () => {
-    setRefreshingStatus(true);
+    if (statusBusy.current || !user) return;
+    statusBusy.current = true; setRefreshingStatus(true);
     try {
-      await hydrateFromStorage();
-      const currentUser = useAuthStore.getState().user;
-      if (currentUser?.storeId && currentUser?.tenantId) {
-        if (currentUser.roles?.includes("store_manager")) {
-          navigate("/store/manager", { replace: true });
-        } else {
-          navigate("/store/staff", { replace: true });
-        }
-      } else {
-        // Vẫn chưa được duyệt
-        alert("Yêu cầu của bạn vẫn đang chờ Chủ quán phê duyệt. Vui lòng liên hệ Chủ quán để được duyệt nhanh.");
+      const result = await workspaceApi.getJoinStatus();
+      setStatusError('');
+      setPendingReqInfo(result.status === 'pending' ? result.request : null);
+      setRejectedReason(result.status === 'rejected' ? result.request?.rejectedReason || 'Chủ quán chưa chấp nhận yêu cầu. Bạn có thể gửi yêu cầu mới.' : '');
+      if (result.status === 'approved') {
+        const session = await workspaceApi.activate();
+        setTokensAndUser(session.accessToken, session.refreshToken, session.user);
+        navigate(session.user.roles.includes('store_manager') ? '/store/manager' : '/store/staff', { replace: true });
       }
-    } catch {
-      alert("Đang kiểm tra kết nối hệ thống...");
-    } finally {
-      setRefreshingStatus(false);
-    }
+    } catch (err: any) { setStatusError(err?.response?.data?.message || 'Mất kết nối. Chưa kiểm tra được trạng thái duyệt.'); }
+    finally { statusBusy.current = false; setRefreshingStatus(false); setStatusLoaded(true); }
   };
-
+  useEffect(() => {
+    if (!user) { navigate('/login', { replace: true }); return; }
+    void handleRefreshStatus();
+    const refreshVisible = () => { if (document.visibilityState === 'visible') void handleRefreshStatus(); };
+    const timer = window.setInterval(refreshVisible, 10000);
+    window.addEventListener('focus', refreshVisible);
+    document.addEventListener('visibilitychange', refreshVisible);
+    return () => { clearInterval(timer); window.removeEventListener('focus', refreshVisible); document.removeEventListener('visibilitychange', refreshVisible); };
+  }, [user?.sub]);
   const handleLogout = () => {
     logout();
     navigate("/login", { replace: true });
@@ -168,6 +164,8 @@ export default function StaffJoinStorePage() {
         fontFamily: 'var(--font-sans, "Be Vietnam Pro", -apple-system, sans-serif)',
       }}
     >
+      {statusError && <p role="alert">{statusError} <button onClick={() => void handleRefreshStatus()}>Thử lại</button></p>}
+      {rejectedReason && <p role="status">Yêu cầu đã bị từ chối: {rejectedReason}</p>}
       {/* Brand Header */}
       <div style={{ textAlign: "center", marginBottom: 20 }}>
         <Link
@@ -264,7 +262,7 @@ export default function StaffJoinStorePage() {
           </div>
 
           {/* TRẠNG THÁI: ĐANG CHỜ DUYỆT (PENDING STATE) */}
-          {pendingReqInfo ? (
+          {!statusLoaded ? (<p role="status">Đang kiểm tra trạng thái gia nhập…</p>) : pendingReqInfo ? (
             <div>
               <div
                 style={{
@@ -361,7 +359,7 @@ export default function StaffJoinStorePage() {
                 </button>
 
                 <p style={{ textAlign: "center", fontSize: "0.8rem", color: "#556B5A", margin: "4px 0 0" }}>
-                  Khi Chủ quán phê duyệt và phân vai trò, bạn sẽ được tự động chuyển vào Portal làm việc.
+                  Khi Chủ quán phê duyệt và phân vai trò, bạn sẽ được tự động chuyển vào màn hình làm việc.
                 </p>
               </div>
             </div>
@@ -381,7 +379,7 @@ export default function StaffJoinStorePage() {
                   Nhập Mã Cửa Hàng (Store Code)
                 </h2>
                 <p style={{ fontSize: "0.88rem", color: "#556B5A", margin: 0, lineHeight: 1.5 }}>
-                  Chủ quán hoặc Quản lý chi nhánh sẽ cung cấp cho bạn một mã cửa hàng (VD: <code>STORE-1-KONEKT</code>).
+                  Chủ quán sẽ cung cấp cho bạn một mã cửa hàng (VD: <code>STORE-1-KONEKT</code>).
                 </p>
               </div>
 
