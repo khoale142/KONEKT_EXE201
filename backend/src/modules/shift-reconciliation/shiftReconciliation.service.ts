@@ -243,7 +243,7 @@ export async function openShiftReconciliation(params: {
 
   if (currentOpen) {
     throw new ApiError(
-      400,
+      409,
       `Chi nhánh đang có một ca đang mở (Ca ${currentOpen.shift_code}). Vui lòng chốt ca đó trước khi mở ca mới.`
     );
   }
@@ -251,19 +251,27 @@ export async function openShiftReconciliation(params: {
   const schedule = getShiftSchedule(workDate, params.shiftCode);
   const membershipId = await resolveActorMembershipId(params.reqUser, params.tenantId);
 
-  const created = await repo.createReconciliation({
-    tenantId: params.tenantId,
-    storeId: params.storeId,
-    shiftSessionId: params.shiftSessionId ?? null,
-    workDate,
-    shiftCode: params.shiftCode,
-    scheduledStartAt: schedule.scheduledStartAt,
-    scheduledEndAt: schedule.scheduledEndAt,
-    openingCashAmount,
-    openedBy: getActorUserId(params.reqUser),
-    membershipId,
-    note: params.note?.trim() || null,
-  });
+  let created;
+  try {
+    created = await repo.createReconciliation({
+      tenantId: params.tenantId,
+      storeId: params.storeId,
+      shiftSessionId: params.shiftSessionId ?? null,
+      workDate,
+      shiftCode: params.shiftCode,
+      scheduledStartAt: schedule.scheduledStartAt,
+      scheduledEndAt: schedule.scheduledEndAt,
+      openingCashAmount,
+      openedBy: getActorUserId(params.reqUser),
+      membershipId,
+      note: params.note?.trim() || null,
+    });
+  } catch (err: any) {
+    if (err.code === "23505" && err.constraint === "uq_shift_sessions_open_store") {
+      throw new ApiError(409, "Chi nhánh đang có một ca đang mở. Vui lòng chốt ca đó trước khi mở ca mới.");
+    }
+    throw err;
+  }
 
   const detail = await buildDetail({
     reconciliationRow: created,

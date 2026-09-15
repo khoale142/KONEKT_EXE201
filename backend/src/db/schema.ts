@@ -509,6 +509,7 @@ export const orders = pgTable('orders', {
   discountReason: varchar('discount_reason', { length: 255 }),
   notes: text('notes'),
   isHold: boolean('is_hold').default(false).notNull(),
+  shiftSessionId: integer('shift_session_id').references(() => shiftSessions.id, { onDelete: 'set null' }),
   snapshot: jsonb('snapshot'),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
@@ -521,6 +522,7 @@ export const orders = pgTable('orders', {
   index('idx_orders_is_hold').on(table.isHold),
   index('idx_orders_queue_number').on(table.queueNumber),
   index('idx_orders_created').on(table.createdAt),
+  index('idx_orders_shift_session').on(table.shiftSessionId),
 ]);
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -559,12 +561,14 @@ export const payments = pgTable('payments', {
   receivedAmount: decimal('received_amount', { precision: 12, scale: 2 }),  // Số tiền khách đưa (cash)
   changeAmount: decimal('change_amount', { precision: 12, scale: 2 }),      // Tiền thừa trả lại
   transactionRef: varchar('transaction_ref', { length: 255 }),               // Mã giao dịch VietQR/Casso
+  shiftSessionId: integer('shift_session_id').references(() => shiftSessions.id, { onDelete: 'set null' }),
   paidAt: timestamp('paid_at', { withTimezone: true }),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
 }, (table) => [
   index('idx_payments_order').on(table.orderId),
   index('idx_payments_method').on(table.method),
   index('idx_payments_status').on(table.status),
+  index('idx_payments_shift_session').on(table.shiftSessionId),
 ]);
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -582,6 +586,7 @@ export const gatewayPayments = pgTable('gateway_payments', {
   payUrl: text('pay_url'),
   deeplink: text('deeplink'),
   qrCodeUrl: text('qr_code_url'),
+  shiftSessionId: integer('shift_session_id').references(() => shiftSessions.id, { onDelete: 'set null' }),
   rawRequest: jsonb('raw_request'),
   rawResponse: jsonb('raw_response'),
   expiredAt: timestamp('expired_at', { withTimezone: true }),
@@ -592,6 +597,7 @@ export const gatewayPayments = pgTable('gateway_payments', {
   index('idx_gateway_payments_order').on(table.orderId),
   index('idx_gateway_payments_request').on(table.requestId),
   index('idx_gateway_payments_status').on(table.status),
+  index('idx_gateway_payments_shift_session').on(table.shiftSessionId),
 ]);
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -604,6 +610,7 @@ export const shiftSessions = pgTable('shift_sessions', {
   tenantId: integer('tenant_id').references(() => tenants.id, { onDelete: 'cascade' }).notNull(),
   storeId: integer('store_id').references(() => stores.id, { onDelete: 'cascade' }).notNull(),
   userId: integer('user_id').references(() => users.id, { onDelete: 'set null' }),
+  membershipId: integer('membership_id').references(() => tenantMemberships.id, { onDelete: 'set null' }),
   status: shiftStatusEnum('status').default('open').notNull(),
   shiftCode: varchar('shift_code', { length: 10 }).default('A').notNull(), // Ca A, Ca B...
   openingCash: decimal('opening_cash', { precision: 12, scale: 2 }).default('0').notNull(),  // Tiền lẻ ban đầu
@@ -614,12 +621,17 @@ export const shiftSessions = pgTable('shift_sessions', {
   totalOrders: integer('total_orders').default(0),
   openedAt: timestamp('opened_at', { withTimezone: true }).defaultNow().notNull(),
   closedAt: timestamp('closed_at', { withTimezone: true }),
+  closedByMembershipId: integer('closed_by_membership_id').references(() => tenantMemberships.id, { onDelete: 'set null' }),
+  reconciledByMembershipId: integer('reconciled_by_membership_id').references(() => tenantMemberships.id, { onDelete: 'set null' }),
+  reconciledAt: timestamp('reconciled_at', { withTimezone: true }),
   notes: text('notes'),
 }, (table) => [
   index('idx_shift_sessions_tenant').on(table.tenantId),
   index('idx_shift_sessions_store').on(table.storeId),
   index('idx_shift_sessions_user').on(table.userId),
+  index('idx_shift_sessions_membership_opened_at').on(table.membershipId, table.openedAt),
   index('idx_shift_sessions_status').on(table.status),
+  uniqueIndex('uq_shift_sessions_open_store').on(table.tenantId, table.storeId).where(sql`${table.status} = 'open'`),
 ]);
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -935,12 +947,21 @@ export const orderItemsRelations = relations(orderItems, ({ one }) => ({
 
 export const paymentsRelations = relations(payments, ({ one }) => ({
   order: one(orders, { fields: [payments.orderId], references: [orders.id] }),
+  shiftSession: one(shiftSessions, { fields: [payments.shiftSessionId], references: [shiftSessions.id] }),
 }));
 
-export const shiftSessionsRelations = relations(shiftSessions, ({ one }) => ({
+export const gatewayPaymentsRelations = relations(gatewayPayments, ({ one }) => ({
+  order: one(orders, { fields: [gatewayPayments.orderId], references: [orders.id] }),
+  shiftSession: one(shiftSessions, { fields: [gatewayPayments.shiftSessionId], references: [shiftSessions.id] }),
+}));
+
+export const shiftSessionsRelations = relations(shiftSessions, ({ one, many }) => ({
   tenant: one(tenants, { fields: [shiftSessions.tenantId], references: [tenants.id] }),
   store: one(stores, { fields: [shiftSessions.storeId], references: [stores.id] }),
   user: one(users, { fields: [shiftSessions.userId], references: [users.id] }),
+  orders: many(orders),
+  payments: many(payments),
+  gatewayPayments: many(gatewayPayments),
 }));
 
 export const combosRelations = relations(combos, ({ one, many }) => ({
@@ -988,3 +1009,37 @@ export const customersRelations = relations(customers, ({ one }) => ({
 export const orderDiscountApplicationsRelations = relations(orderDiscountApplications, ({ one }) => ({
   order: one(orders, { fields: [orderDiscountApplications.orderId], references: [orders.id] }),
 }));
+
+export const storeInventoryBalances = pgTable('store_inventory_balances', {
+  id: serial('id').primaryKey(),
+  tenantId: integer('tenant_id').notNull(),
+  storeId: integer('store_id').notNull(),
+  ingredientId: integer('ingredient_id').notNull(),
+  onHandQuantity: decimal('on_hand_quantity', { precision: 18, scale: 6 }).default('0').notNull(),
+  averageUnitCost: decimal('average_unit_cost', { precision: 18, scale: 4 }).default('0').notNull(),
+  updatedByUserId: integer('updated_by_user_id'),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+});
+
+export const inventoryMovements = pgTable('inventory_movements', {
+  id: serial('id').primaryKey(),
+  tenantId: integer('tenant_id').notNull(),
+  storeId: integer('store_id').notNull(),
+  ingredientId: integer('ingredient_id').notNull(),
+  movementType: varchar('movement_type', { length: 50 }).notNull(),
+  quantityDelta: decimal('quantity_delta', { precision: 18, scale: 6 }).notNull(),
+  unitCost: decimal('unit_cost', { precision: 18, scale: 4 }).default('0').notNull(),
+  costDelta: decimal('cost_delta', { precision: 18, scale: 2 }).default('0').notNull(),
+  referenceType: varchar('reference_type', { length: 80 }).notNull(),
+  referenceId: integer('reference_id').notNull(),
+  referenceLineId: integer('reference_line_id'),
+  sourceKey: varchar('source_key', { length: 255 }).notNull(),
+  movementGroupId: varchar('movement_group_id', { length: 36 }).notNull(),
+  relatedMovementId: integer('related_movement_id'),
+  reasonCode: varchar('reason_code', { length: 100 }),
+  note: text('note'),
+  occurredAt: timestamp('occurred_at', { withTimezone: true }).defaultNow().notNull(),
+  postedAt: timestamp('posted_at', { withTimezone: true }).defaultNow().notNull(),
+  createdByUserId: integer('created_by_user_id'),
+});

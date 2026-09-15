@@ -6,8 +6,10 @@ import { getPosMenu } from "./menu.service";
 
 const router = Router();
 
+export const POS_MENU_PORTALS: Array<"POS"> = ["POS"];
+
 // POS only
-router.use(authGuard, portalGuard(["POS"]));
+router.use(authGuard, portalGuard(POS_MENU_PORTALS));
 
 router.get(
   "/",

@@ -2497,9 +2497,10 @@ export async function createPosOrder(params: {
           applied_customer_voucher_id,
           order_type,
           special_note,
-          service_mode
+          service_mode,
+          shift_session_id
         )
-        VALUES ($1,$2,$3,$4,$5,$6,$7,'paid',$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)
+        VALUES ($1,$2,$3,$4,$5,$6,$7,'paid',$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)
         RETURNING
           id,
           order_code,
@@ -2530,6 +2531,7 @@ export async function createPosOrder(params: {
         orderType,
         specialNote || null,
         serviceMode,
+        shiftGate.reconciliationId,
       ],
     );
 
@@ -2560,14 +2562,15 @@ export async function createPosOrder(params: {
     if (!isSpecial) {
       await client.query(
         `
-          INSERT INTO coffee_chain_db.order_payments(order_id, method, amount, reference_code)
-          VALUES ($1, $2, $3, $4)
+          INSERT INTO coffee_chain_db.order_payments(order_id, method, amount, reference_code, shift_session_id)
+          VALUES ($1, $2, $3, $4, $5)
         `,
         [
           order.id,
           params.payment.method,
           paidAmount,
           params.payment.referenceCode || null,
+          shiftGate.reconciliationId,
         ],
       );
 
@@ -3021,9 +3024,10 @@ export async function createPosOrderForGateway(
           applied_customer_voucher_id,
           order_type,
           special_note,
-          service_mode
+          service_mode,
+          shift_session_id
         )
-        VALUES ($1,$2,$3,$4,$5,$6,$7,'pending',$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)
+        VALUES ($1,$2,$3,$4,$5,$6,$7,'pending',$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)
         RETURNING
           id,
           order_code,
@@ -3054,6 +3058,7 @@ export async function createPosOrderForGateway(
         orderType,
         specialNote || null,
         serviceMode,
+        shiftGate.reconciliationId,
       ],
     );
 
@@ -4501,14 +4506,15 @@ export async function payHeldPosOrder(params: {
     if (!isSpecial) {
       await client.query(
         `
-          INSERT INTO coffee_chain_db.order_payments(order_id, method, amount, reference_code)
-          VALUES ($1, $2, $3, $4)
+          INSERT INTO coffee_chain_db.order_payments(order_id, method, amount, reference_code, shift_session_id)
+          VALUES ($1, $2, $3, $4, $5)
         `,
         [
           orderRow.id,
           params.payment.method,
           paidAmount,
           params.payment.referenceCode || null,
+          shiftGate.reconciliationId,
         ],
       );
 

@@ -43,6 +43,20 @@
       "when": 1789290000000,
       "tag": "0005_canonical_store_invite_requests",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1789459829081,
+      "tag": "0010_phase3_shift_session_id",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1789460432489,
+      "tag": "0011_phase3_gateway_payments_shift",
+      "breakpoints": true
     }
   ]
 }

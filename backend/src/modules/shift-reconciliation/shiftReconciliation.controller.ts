@@ -32,9 +32,9 @@ function getContextFromReq(req: Request): { tenantId: number; storeId: number } 
   const queryStore = req.query.storeId ? Number(req.query.storeId) : null;
   const bodyStore = req.body && req.body.storeId ? Number(req.body.storeId) : null;
 
-  const storeId = headerStore || queryStore || bodyStore || u.storeId || (u.storeIds && u.storeIds[0]);
+  const storeId = headerStore || queryStore || bodyStore || u.storeId;
   if (!Number.isInteger(Number(storeId)) || Number(storeId) <= 0) {
-    throw new ApiError(403, "Store context is required");
+    throw new ApiError(400, "STORE_SELECTION_REQUIRED");
   }
 
   return { tenantId, storeId: Number(storeId) };

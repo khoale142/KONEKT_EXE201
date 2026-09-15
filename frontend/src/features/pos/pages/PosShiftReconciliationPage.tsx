@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { useAuthStore, hasPermission } from "../../../app/store/auth.store";
 import {
   CheckCircle2,
   History,
@@ -93,6 +94,7 @@ function OrderTypeBadge(props: { orderType?: string }) {
 
 export default function PosShiftReconciliationPage() {
   const nav = useNavigate();
+  const user = useAuthStore((s) => s.user);
   const today = useMemo(() => todayLocal(), []);
 
   const [loading, setLoading] = useState(true);
@@ -140,6 +142,10 @@ export default function PosShiftReconciliationPage() {
         setConfirmText("");
       }
     } catch (e: any) {
+      if (e?.response?.data?.message === "STORE_SELECTION_REQUIRED") {
+        nav("/workspace/select-store");
+        return;
+      }
       setError(e?.response?.data?.message || e.message || "Tải ca hiện tại thất bại");
     } finally {
       setReloading(false);
@@ -163,6 +169,10 @@ export default function PosShiftReconciliationPage() {
     try {
       await Promise.all([loadCurrent(), loadHistory()]);
     } catch (e: any) {
+      if (e?.response?.data?.message === "STORE_SELECTION_REQUIRED") {
+        nav("/workspace/select-store");
+        return;
+      }
       setError(e?.response?.data?.message || e.message || "Tải dữ liệu ca thất bại");
     } finally {
       setLoading(false);
@@ -355,6 +365,7 @@ export default function PosShiftReconciliationPage() {
         >
           <div className="pos-stack">
             {!detail ? (
+              hasPermission(user, "shift.operate") ? (
               <SectionCard title="Mở ca bán hàng mới (Shift Opening)">
                 <div style={{ display: "grid", gap: 14 }}>
                   <div
@@ -532,6 +543,13 @@ export default function PosShiftReconciliationPage() {
                   </div>
                 </div>
               </SectionCard>
+              ) : (
+                <SectionCard title="Quyền Hạn Bị Hạn Chế">
+                  <div style={{ padding: "20px 0", textAlign: "center", color: "#6b5b4d", fontSize: 14 }}>
+                    Bạn không có quyền mở ca. Vui lòng liên hệ quản lý để được cấp quyền "shift.operate".
+                  </div>
+                </SectionCard>
+              )
             ) : (
               <>
                 {isViewingHistory || detail.reconciliation.status === "closed" ? (

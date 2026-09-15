@@ -13,6 +13,7 @@ export interface InsertPaymentParams {
   pay_url: string | null;
   deeplink: string | null;
   qr_code_url: string | null;
+  shift_session_id: number | null;
   raw_request: Record<string, unknown> | null;
   raw_response: Record<string, unknown> | null;
   expired_at: Date | null;
@@ -31,6 +32,7 @@ export async function insertPayment(params: InsertPaymentParams) {
       payUrl: params.pay_url,
       deeplink: params.deeplink,
       qrCodeUrl: params.qr_code_url,
+      shiftSessionId: params.shift_session_id,
       rawRequest: params.raw_request,
       rawResponse: params.raw_response,
       expiredAt: params.expired_at,
@@ -43,6 +45,7 @@ export async function insertPayment(params: InsertPaymentParams) {
       amount: gatewayPayments.amount,
       status: gatewayPayments.status,
       pay_url: gatewayPayments.payUrl,
+      shift_session_id: gatewayPayments.shiftSessionId,
       created_at: gatewayPayments.createdAt,
     });
   return created;
@@ -227,6 +230,7 @@ export async function settleGatewayPayment(params: {
       status: "paid",
       amount: String(payment.amount),
       transactionRef: params.providerOrderId,
+      shiftSessionId: payment.shiftSessionId,
       paidAt: now,
     });
 
@@ -265,6 +269,8 @@ export async function getOrderForPayment(orderId: number) {
     id: o.id,
     final_amount: Number(o.totalAmount || 0),
     status: o.status,
+    tenant_id: o.tenantId,
+    store_id: o.storeId,
   };
 }
 

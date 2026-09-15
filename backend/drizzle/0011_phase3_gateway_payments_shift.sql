@@ -1,0 +1,3 @@
+ALTER TABLE "gateway_payments" ADD COLUMN "shift_session_id" integer;--> statement-breakpoint
+ALTER TABLE "gateway_payments" ADD CONSTRAINT "gateway_payments_shift_session_id_shift_sessions_id_fk" FOREIGN KEY ("shift_session_id") REFERENCES "public"."shift_sessions"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+CREATE INDEX "idx_gateway_payments_shift_session" ON "gateway_payments" USING btree ("shift_session_id");

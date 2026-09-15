@@ -10,6 +10,7 @@ import {
 } from "./payments.repo";
 import { reconcileRecentCassoTransactions } from "./payments.reconcile.service";
 import { scheduleOrderPurchaseOutreach } from "../order-outreach/orderOutreach.service";
+import { assertStoreCanCreatePosOrder } from "../shift-reconciliation/shiftReconciliation.service";
 
 function buildVietqrRequestId(orderId: number): string {
   const last6 = String(orderId % 1_000_000).padStart(6, "0");
@@ -126,6 +127,16 @@ export async function initVietqrPayment(orderId: number) {
     accountName: String(vietqrConfig.userBankName),
   });
 
+  let shiftSessionId: number | null = null;
+  try {
+    const shiftGate = await assertStoreCanCreatePosOrder(Number(order.store_id), Number(order.tenant_id));
+    shiftSessionId = shiftGate.reconciliationId;
+  } catch (err) {
+    // If no shift is open, we can either reject or allow it with null. 
+    // Business rule: best effort snapshot. If we strictly require shift to be open for payment:
+    throw new ApiError(400, "Không thể tạo thanh toán: " + (err instanceof Error ? err.message : String(err)));
+  }
+
   const saved = await insertPayment({
     order_id: orderId,
     provider: "vietqr",
@@ -136,6 +147,7 @@ export async function initVietqrPayment(orderId: number) {
     pay_url: null,
     deeplink: null,
     qr_code_url: qrImageUrl,
+    shift_session_id: shiftSessionId,
     raw_request: { mode: "quicklink" },
     raw_response: { mode: "quicklink" },
     expired_at: expiredAtDate,
