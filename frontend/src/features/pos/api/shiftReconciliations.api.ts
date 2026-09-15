@@ -28,7 +28,7 @@ export type ShiftReconciliationItem = {
   closedAt: string | null;
   openedBy: number | null;
   closedBy: number | null;
-  status: "open" | "closed";
+  status: "open" | "closed" | "reconciled";
   note: string | null;
   createdAt: string;
   updatedAt: string;
@@ -123,7 +123,7 @@ export type ShiftReconciliationListResponse = {
     storeId: number;
     dateFrom: string | null;
     dateTo: string | null;
-    status: "open" | "closed" | null;
+    status: "open" | "closed" | "reconciled" | null;
     shiftCode: "A" | "B" | null;
     limit: number;
     offset: number;
@@ -180,4 +180,14 @@ export async function listShiftReconciliations(params?: {
 }) {
   const r = await api.get("/pos/shift-reconciliations", { params });
   return r.data as ShiftReconciliationListResponse;
+}
+
+export async function reconcileShiftReconciliation(
+  id: number,
+  payload: {
+    note?: string;
+  }
+) {
+  const r = await api.post(`/pos/shift-reconciliations/${id}/reconcile`, payload);
+  return r.data as ShiftReconciliationDetailResponse;
 }

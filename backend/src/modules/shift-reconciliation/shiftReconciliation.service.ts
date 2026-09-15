@@ -425,81 +425,52 @@ export async function closeShiftReconciliation(params: {
     throw new ApiError(400, "Nội dung xác nhận không đúng. Vui lòng nhập: XÁC NHẬN ĐÓNG CA");
   }
 
-  const row = await repo.getReconciliationById({
-    id: params.id,
-    tenantId: params.tenantId,
-    storeId: params.storeId,
-  });
+  const closedByMembershipId = await resolveActorMembershipId(params.reqUser, params.tenantId);
 
-  if (!row) {
-    throw new ApiError(404, "Không tìm thấy phiên ca làm việc");
+  let result;
+  try {
+    result = await repo.closeShiftReconciliationAtomic({
+      id: params.id,
+      tenantId: params.tenantId,
+      storeId: params.storeId,
+      closedByMembershipId,
+      actualCashAmount,
+      note: params.note?.trim() || null,
+    });
+  } catch (err: any) {
+    throw new ApiError(400, err.message || "Lỗi khi đóng ca");
   }
 
-  if (String(row.status) !== "open") {
-    throw new ApiError(400, "Phiên ca này đã được đóng");
-  }
-
-  const summaryRow = await repo.getReconciliationSummary({
-    reconciliationId: params.id,
-    tenantId: params.tenantId,
-    storeId: params.storeId,
-  });
-
-  const summary = mapSummaryRow(summaryRow);
-
-  const expectedCashAmount = summary.cashAmount;
-  const expectedTransferAmount = summary.transferAmount;
-  const expectedTotalAmount = summary.expectedTotalAmount;
-  const varianceCashAmount = actualCashAmount - summary.expectedCashInDrawer;
-
-  const closed = await repo.closeReconciliation({
-    id: params.id,
-    tenantId: params.tenantId,
-    storeId: params.storeId,
-    closedBy: getActorUserId(params.reqUser),
-    actualCashAmount,
-    expectedCashAmount,
-    expectedTransferAmount,
-    expectedTotalAmount,
-    varianceCashAmount,
-    totalOrders: summary.totalOrders,
-    cashOrderCount: summary.cashOrderCount,
-    transferOrderCount: summary.transferOrderCount,
-    note: params.note?.trim() || null,
-  });
-
-  if (!closed) {
-    throw new ApiError(500, "Đóng phiên ca thất bại");
-  }
+  const { updatedShift, summaryData } = result;
 
   const detail = await buildDetail({
-    reconciliationRow: closed,
+    reconciliationRow: updatedShift,
     tenantId: params.tenantId,
     storeId: params.storeId,
   });
 
   await safeWritePosActionLog({
     storeId: params.storeId,
-    reconciliationId: Number(closed.id),
+    reconciliationId: Number(updatedShift.id),
     reqUser: params.reqUser,
     actionType: "SHIFT_CLOSE",
     entityType: "SHIFT_RECONCILIATION",
-    entityId: Number(closed.id),
-    note: `Đóng ca ${closed.shift_code} - Lệch két: ${varianceCashAmount}`,
+    entityId: Number(updatedShift.id),
+    note: `Đóng ca ${updatedShift.shift_code} - Lệch két: ${summaryData.varianceCashAmount}`,
     beforeData: {
       status: "open",
-      expectedCashInDrawer: summary.expectedCashInDrawer,
-      expectedCashAmount,
-      expectedTransferAmount,
-      expectedTotalAmount,
+      expectedCashInDrawer: summaryData.expectedCashInDrawer,
+      expectedCashAmount: summaryData.expectedCashAmount,
+      expectedTransferAmount: summaryData.expectedTransferAmount,
+      expectedTotalAmount: summaryData.expectedTotalAmount,
     },
     afterData: {
       status: "closed",
       actualCashAmount,
-      varianceCashAmount,
-      totalOrders: summary.totalOrders,
-      cashOrderCount: summary.cashOrderCount,
-      transferOrderCount: summary.transferOrderCount,
+      varianceCashAmount: summaryData.varianceCashAmount,
+      totalOrders: summaryData.totalOrders,
+      cashOrderCount: summaryData.cashOrderCount,
+      transferOrderCount: summaryData.transferOrderCount,
     },
   });
 
@@ -561,4 +532,52 @@ export async function assertStoreCanCreatePosOrder(storeId: number, tenantId?: n
     shiftCode: (shiftCode.toUpperCase() === "B" ? "B" : "A") as ShiftCode,
     warning: buildShiftWarning(current),
   };
+}
+
+export async function reconcileShiftReconciliation(params: {
+  reqUser: any;
+  id: number;
+  tenantId: number;
+  storeId: number;
+  note?: string;
+}) {
+  const reconciledByMembershipId = await resolveActorMembershipId(params.reqUser, params.tenantId);
+
+  let updatedShift;
+  try {
+    updatedShift = await repo.reconcileShiftReconciliationAtomic({
+      id: params.id,
+      tenantId: params.tenantId,
+      storeId: params.storeId,
+      reconciledByMembershipId,
+      note: params.note?.trim() || null,
+    });
+  } catch (err: any) {
+    throw new ApiError(400, err.message || "Lỗi khi đối soát ca");
+  }
+
+  const detail = await buildDetail({
+    reconciliationRow: updatedShift,
+    tenantId: params.tenantId,
+    storeId: params.storeId,
+  });
+
+  await safeWritePosActionLog({
+    storeId: params.storeId,
+    reconciliationId: Number(updatedShift.id),
+    reqUser: params.reqUser,
+    actionType: "SHIFT_RECONCILE",
+    entityType: "SHIFT_RECONCILIATION",
+    entityId: Number(updatedShift.id),
+    note: `Xác nhận đối soát ca ${updatedShift.shift_code} - Lệch két: ${updatedShift.variance_cash_amount}`,
+    beforeData: {
+      status: "closed",
+    },
+    afterData: {
+      status: "reconciled",
+      varianceCashAmount: updatedShift.variance_cash_amount,
+    },
+  });
+
+  return detail;
 }

@@ -16,6 +16,7 @@ import {
   listShiftReconciliations,
   openShiftReconciliation,
   verifyShiftClose,
+  reconcileShiftReconciliation,
   type ShiftReconciliationDetailResponse,
   type ShiftReconciliationItem,
   type VerifyShiftCloseResponse,
@@ -102,6 +103,7 @@ export default function PosShiftReconciliationPage() {
   const [submittingOpen, setSubmittingOpen] = useState(false);
   const [submittingVerify, setSubmittingVerify] = useState(false);
   const [submittingClose, setSubmittingClose] = useState(false);
+  const [submittingReconcile, setSubmittingReconcile] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [isViewingHistory, setIsViewingHistory] = useState<boolean>(false);
@@ -119,6 +121,7 @@ export default function PosShiftReconciliationPage() {
   const [confirmActualCashAmount, setConfirmActualCashAmount] = useState("");
   const [confirmText, setConfirmText] = useState("");
   const [closeNote, setCloseNote] = useState("");
+  const [reconcileNote, setReconcileNote] = useState("");
 
   const [historyDateFrom, setHistoryDateFrom] = useState(today);
   const [historyDateTo, setHistoryDateTo] = useState(today);
@@ -140,6 +143,7 @@ export default function PosShiftReconciliationPage() {
         setActualCashAmount("");
         setConfirmActualCashAmount("");
         setConfirmText("");
+        setReconcileNote("");
       }
     } catch (e: any) {
       if (e?.response?.data?.message === "STORE_SELECTION_REQUIRED") {
@@ -261,6 +265,7 @@ export default function PosShiftReconciliationPage() {
       setCloseNote("");
       setOpeningCashAmount("");
       setOpenNote("");
+      setReconcileNote("");
       setShiftCode(nextShiftCode);
       setSuccessMsg(
         `Chốt ca ${closedShiftCode} ngày ${closedDate} thành công! Két tiền đã được đối soát chính xác và ca đã đóng hoàn tất.`
@@ -270,6 +275,28 @@ export default function PosShiftReconciliationPage() {
       setError(e?.response?.data?.message || e.message || "Đóng ca thất bại");
     } finally {
       setSubmittingClose(false);
+    }
+  };
+
+  const handleReconcileShift = async () => {
+    if (!detail?.reconciliation?.id) return;
+
+    setSubmittingReconcile(true);
+    setError(null);
+    setSuccessMsg(null);
+    try {
+      await reconcileShiftReconciliation(detail.reconciliation.id, {
+        note: reconcileNote.trim() || undefined,
+      });
+
+      setSuccessMsg(`Đối soát ca ${detail.reconciliation.shiftCode} ngày ${detail.reconciliation.workDate} thành công!`);
+      setReconcileNote("");
+      await loadCurrent();
+      await loadHistory();
+    } catch (e: any) {
+      setError(e?.response?.data?.message || e.message || "Đối soát ca thất bại");
+    } finally {
+      setSubmittingReconcile(false);
     }
   };
 
@@ -687,12 +714,17 @@ export default function PosShiftReconciliationPage() {
                           padding: "4px 8px",
                           borderRadius: 999,
                           background:
-                            detail.reconciliation.status === "open" ? "#dcfce7" : "#e5e7eb",
+                            detail.reconciliation.status === "open" ? "#dcfce7" :
+                            detail.reconciliation.status === "reconciled" ? "#dbeafe" : "#f3f4f6",
+                          color:
+                            detail.reconciliation.status === "open" ? "#166534" :
+                            detail.reconciliation.status === "reconciled" ? "#1e40af" : "#374151",
                           display: "inline-block",
                           fontWeight: 700,
                         }}
                       >
-                        {detail.reconciliation.status === "open" ? "Đang mở" : "Đã đóng"}
+                        {detail.reconciliation.status === "open" ? "Đang mở" : 
+                         detail.reconciliation.status === "reconciled" ? "Đã đối soát" : "Đã đóng (chờ đối soát)"}
                       </span>
                     </div>
                     <div><b>Tiền đầu ca:</b> {formatMoney(detail.reconciliation.openingCashAmount)}</div>
@@ -747,17 +779,65 @@ export default function PosShiftReconciliationPage() {
                   <MetricCard title="Món special" value={String(detail.summary.specialItemCount || 0)} />
                 </div>
 
-                <SectionCard title="Đóng ca / Xác thực 2 bước">
-                  {detail.reconciliation.status === "closed" ? (
+                <SectionCard title="Kiểm quỹ & Đối soát">
+                  {detail.reconciliation.status === "closed" || detail.reconciliation.status === "reconciled" ? (
                     <div style={{ display: "grid", gap: 10 }}>
                       <div><b>Tiền mặt thực tế:</b> {formatMoney(detail.reconciliation.actualCashAmount || 0)}</div>
                       <div>
                         <b>Chênh lệch:</b>{" "}
-                        <span style={{ color: detail.reconciliation.varianceCashAmount === 0 ? "#111" : "crimson", fontWeight: 700 }}>
+                        <span style={{ color: detail.reconciliation.varianceCashAmount === 0 ? "#166534" : "crimson", fontWeight: 700 }}>
                           {detail.reconciliation.varianceCashAmount > 0 ? "+" : ""}
                           {formatMoney(detail.reconciliation.varianceCashAmount)}
                         </span>
                       </div>
+                      {detail.reconciliation.status === "closed" ? (
+                        <div style={{
+                          marginTop: 10,
+                          padding: 12,
+                          borderRadius: 12,
+                          background: "#fffbeb",
+                          border: "1px solid #fde68a"
+                        }}>
+                          <div style={{ color: "#92400e", fontWeight: 600, marginBottom: 8 }}>
+                            Ca làm việc này đã đóng, đang chờ Kế toán / Quản lý xác nhận đối soát.
+                          </div>
+                          {hasPermission(user, "shift.reconcile") ? (
+                            <div style={{ display: "grid", gap: 10 }}>
+                              {detail.reconciliation.varianceCashAmount !== 0 ? (
+                                <div>
+                                  <div style={{ fontSize: 13, marginBottom: 4, color: "#92400e" }}>
+                                    Vì có chênh lệch tiền mặt, vui lòng nhập lý do (Bắt buộc):
+                                  </div>
+                                  <textarea
+                                    value={reconcileNote}
+                                    onChange={(e) => setReconcileNote(e.target.value)}
+                                    placeholder="Lý do lệch két..."
+                                    rows={2}
+                                    style={{ width: "100%", padding: 8, resize: "vertical" }}
+                                  />
+                                </div>
+                              ) : null}
+                              <div>
+                                <button
+                                  onClick={handleReconcileShift}
+                                  disabled={submittingReconcile || (detail.reconciliation.varianceCashAmount !== 0 && !reconcileNote.trim())}
+                                  style={{ background: "#ca8a04", color: "#fff", border: "none" }}
+                                >
+                                  {submittingReconcile ? "Đang xử lý..." : "Xác nhận đối soát"}
+                                </button>
+                              </div>
+                            </div>
+                          ) : (
+                            <div style={{ color: "#92400e", fontSize: 13 }}>
+                              Tài khoản của bạn không có quyền xác nhận đối soát (`shift.reconcile`).
+                            </div>
+                          )}
+                        </div>
+                      ) : (
+                        <div style={{ color: "#1e40af", fontWeight: 600, marginTop: 10 }}>
+                          ✓ Ca làm việc này đã được đối soát thành công.
+                        </div>
+                      )}
                     </div>
                   ) : (
                     <div style={{ display: "grid", gap: 14 }}>

@@ -250,6 +250,241 @@ export async function closeReconciliation(params: {
   return r.rows[0] || null;
 }
 
+export async function closeShiftReconciliationAtomic(params: {
+  id: number;
+  tenantId: number;
+  storeId: number;
+  closedByMembershipId: number | null;
+  actualCashAmount: number;
+  note?: string | null;
+}) {
+  const { db } = await import("../../db");
+  const { shiftSessions, payments, orders } = await import("../../db/schema");
+  const { eq, and, sql } = await import("drizzle-orm");
+
+  return await db.transaction(async (tx) => {
+    // 1. Lock the shift for update
+    const lockRes = await tx.execute(
+      sql`
+        SELECT 
+          id, 
+          status, 
+          COALESCE(opening_cash, 0) AS opening_cash, 
+          shift_code
+        FROM public.shift_sessions
+        WHERE id = ${params.id}
+          AND tenant_id = ${params.tenantId}
+          AND store_id = ${params.storeId}
+        FOR UPDATE
+      `
+    );
+
+    const lockedShift = lockRes[0] as any;
+    if (!lockedShift) {
+      throw new Error("Không tìm thấy phiên ca làm việc");
+    }
+
+    if (lockedShift.status !== "open") {
+      throw new Error("Phiên ca này đã được đóng");
+    }
+
+    // 2. Compute expected cash strictly from payments attached to this shift
+    const aggRes = await tx.execute(
+      sql`
+        SELECT 
+          COALESCE(SUM(amount), 0) AS cash_payments,
+          COUNT(id) AS cash_order_count
+        FROM public.payments
+        WHERE shift_session_id = ${params.id}
+          AND method = 'cash'
+          AND status = 'paid'
+      `
+    );
+
+    // Compute non-cash payments for stats
+    const transferAggRes = await tx.execute(
+      sql`
+        SELECT 
+          COALESCE(SUM(amount), 0) AS transfer_amount,
+          COUNT(id) AS transfer_order_count
+        FROM public.payments
+        WHERE shift_session_id = ${params.id}
+          AND method IN ('transfer', 'vietqr')
+          AND status = 'paid'
+      `
+    );
+
+    // Count total unique orders attached to this shift
+    const totalOrdersRes = await tx.execute(
+      sql`
+        SELECT COUNT(id) AS total_orders
+        FROM public.orders
+        WHERE shift_session_id = ${params.id}
+      `
+    );
+
+    const cashPayments = Number((aggRes[0] as any)?.cash_payments || 0);
+    const expectedCashAmount = cashPayments;
+    const openingCashAmount = Number(lockedShift.opening_cash || 0);
+    const expectedCashInDrawer = openingCashAmount + cashPayments;
+    const varianceCashAmount = params.actualCashAmount - expectedCashInDrawer;
+
+    const transferAmount = Number((transferAggRes[0] as any)?.transfer_amount || 0);
+    const expectedTotalAmount = cashPayments + transferAmount;
+
+    // 3. Update shift to closed
+    const updateRes = await tx.execute(
+      sql`
+        UPDATE public.shift_sessions
+        SET
+          status = 'closed',
+          closed_at = NOW(),
+          closed_by_membership_id = ${params.closedByMembershipId},
+          closing_cash = ${params.actualCashAmount},
+          expected_cash = ${expectedCashAmount},
+          cash_difference = ${varianceCashAmount},
+          total_sales = ${expectedTotalAmount},
+          total_orders = ${Number((totalOrdersRes[0] as any)?.total_orders || 0)},
+          notes = COALESCE(${params.note || null}, notes)
+        WHERE id = ${params.id}
+        RETURNING
+          id,
+          tenant_id,
+          store_id,
+          membership_id AS opened_membership_id,
+          id AS shift_session_id,
+          TO_CHAR(opened_at, 'YYYY-MM-DD') AS work_date,
+          COALESCE(shift_code, 'A') AS shift_code,
+          opened_at AS scheduled_start_at,
+          opened_at + INTERVAL '16 hours' AS scheduled_end_at,
+          COALESCE(opening_cash, 0)::numeric AS opening_cash_amount,
+          COALESCE(expected_cash, 0)::numeric AS expected_cash_amount,
+          0::numeric AS expected_transfer_amount,
+          COALESCE(total_sales, 0)::numeric AS expected_total_amount,
+          closing_cash AS actual_cash_amount,
+          COALESCE(cash_difference, 0)::numeric AS variance_cash_amount,
+          COALESCE(total_orders, 0)::int AS total_orders,
+          ${Number((aggRes[0] as any)?.cash_order_count || 0)}::int AS cash_order_count,
+          ${Number((transferAggRes[0] as any)?.transfer_order_count || 0)}::int AS transfer_order_count,
+          opened_at AS started_at,
+          closed_at,
+          user_id AS opened_by,
+          user_id AS closed_by,
+          status,
+          notes AS note,
+          opened_at AS created_at,
+          closed_at AS updated_at
+      `
+    );
+
+    return {
+      updatedShift: updateRes[0] as any,
+      summaryData: {
+        expectedCashInDrawer,
+        expectedCashAmount,
+        expectedTransferAmount: transferAmount,
+        expectedTotalAmount,
+        varianceCashAmount,
+        totalOrders: Number((totalOrdersRes[0] as any)?.total_orders || 0),
+        cashOrderCount: Number((aggRes[0] as any)?.cash_order_count || 0),
+        transferOrderCount: Number((transferAggRes[0] as any)?.transfer_order_count || 0),
+      }
+    };
+  });
+}
+
+export async function reconcileShiftReconciliationAtomic(params: {
+  id: number;
+  tenantId: number;
+  storeId: number;
+  reconciledByMembershipId: number | null;
+  note?: string | null;
+}) {
+  const { db } = await import("../../db");
+  const { sql } = await import("drizzle-orm");
+
+  return await db.transaction(async (tx) => {
+    // 1. Lock the shift for update
+    const lockRes = await tx.execute(
+      sql`
+        SELECT 
+          id, 
+          status, 
+          cash_difference
+        FROM public.shift_sessions
+        WHERE id = ${params.id}
+          AND tenant_id = ${params.tenantId}
+          AND store_id = ${params.storeId}
+        FOR UPDATE
+      `
+    );
+
+    const lockedShift = lockRes[0] as any;
+    if (!lockedShift) {
+      throw new Error("Không tìm thấy phiên ca làm việc");
+    }
+
+    if (lockedShift.status === "open") {
+      throw new Error("Không thể đối soát ca đang mở");
+    }
+
+    if (lockedShift.status === "reconciled") {
+      throw new Error("Phiên ca này đã được đối soát trước đó");
+    }
+
+    // 2. Enforce note if cash difference != 0
+    const difference = Number(lockedShift.cash_difference || 0);
+    if (difference !== 0 && !params.note) {
+      throw new Error("Vui lòng nhập lý do chênh lệch trước khi xác nhận đối soát");
+    }
+
+    // 3. Update shift to reconciled
+    const updateRes = await tx.execute(
+      sql`
+        UPDATE public.shift_sessions
+        SET
+          status = 'reconciled',
+          reconciled_at = NOW(),
+          reconciled_by_membership_id = ${params.reconciledByMembershipId},
+          notes = CASE 
+            WHEN ${params.note || null}::text IS NOT NULL THEN CONCAT(COALESCE(notes, ''), E'\n--- Đối soát ---\n', ${params.note || null}::text)
+            ELSE notes 
+          END
+        WHERE id = ${params.id}
+        RETURNING
+          id,
+          tenant_id,
+          store_id,
+          membership_id AS opened_membership_id,
+          id AS shift_session_id,
+          TO_CHAR(opened_at, 'YYYY-MM-DD') AS work_date,
+          COALESCE(shift_code, 'A') AS shift_code,
+          opened_at AS scheduled_start_at,
+          opened_at + INTERVAL '16 hours' AS scheduled_end_at,
+          COALESCE(opening_cash, 0)::numeric AS opening_cash_amount,
+          COALESCE(expected_cash, 0)::numeric AS expected_cash_amount,
+          0::numeric AS expected_transfer_amount,
+          COALESCE(total_sales, 0)::numeric AS expected_total_amount,
+          closing_cash AS actual_cash_amount,
+          COALESCE(cash_difference, 0)::numeric AS variance_cash_amount,
+          COALESCE(total_orders, 0)::int AS total_orders,
+          0::int AS cash_order_count,
+          0::int AS transfer_order_count,
+          opened_at AS started_at,
+          closed_at,
+          user_id AS opened_by,
+          user_id AS closed_by,
+          status,
+          notes AS note,
+          opened_at AS created_at,
+          closed_at AS updated_at
+      `
+    );
+
+    return updateRes[0] as any;
+  });
+}
+
 /**
  * 5. Danh sách lịch sử các phiên ca (lọc tenant_id + store_id)
  */

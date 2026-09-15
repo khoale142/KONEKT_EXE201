@@ -14,6 +14,7 @@ import {
   listShiftReconciliations,
   openShiftReconciliation,
   verifyShiftClose,
+  reconcileShiftReconciliation,
 } from "./shiftReconciliation.service";
 
 /**
@@ -137,6 +138,29 @@ export const closePosShiftReconciliation = asyncHandler(
       confirmActualCashAmount: body.confirmActualCashAmount,
       confirmText: body.confirmText,
       note: body.note,
+    });
+
+    res.json({
+      ok: true,
+      ...result,
+    });
+  }
+);
+
+export const reconcilePosShiftReconciliation = asyncHandler(
+  async (req: Request, res: Response) => {
+    const id = Number(req.params.id);
+    if (!id) throw new ApiError(400, "Invalid reconciliation id");
+
+    const { tenantId, storeId } = getContextFromReq(req);
+    const { note } = req.body;
+
+    const result = await reconcileShiftReconciliation({
+      reqUser: req.user,
+      id,
+      tenantId,
+      storeId,
+      note,
     });
 
     res.json({

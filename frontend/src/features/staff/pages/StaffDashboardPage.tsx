@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { staffAttendanceApi } from "../api/staffAttendance.api";
 import { getCurrentPosition } from "../../shared/hooks/useGeolocation";
-import { useAuthStore } from "../../../app/store/auth.store";
+import { useAuthStore, hasPermission } from "../../../app/store/auth.store";
 import {
   DashboardShell,
   DashboardHero,
@@ -135,24 +135,28 @@ export default function StaffDashboardPage() {
   const storeDisplayName = user?.storeName || (user?.storeId ? `Chi nhánh #${user.storeId}` : "KONEKT Coffee");
 
   // 1. TÁC VỤ BÁN HÀNG & PHA CHẾ (1-TAP OPERATIONS)
-  const posOperations: FeatureCardItem[] = [
-    {
+  const posOperations: FeatureCardItem[] = [];
+
+  if (hasPermission(user, "pos.access")) {
+    posOperations.push({
       to: "/pos/order",
       title: "Mở POS Bán Hàng",
       description: "Giao diện thu ngân order món, in bill và thanh toán VietQR / tiền mặt.",
       icon: <ShoppingCart size={22} color="#3D5E46" />,
       featured: true,
-    },
-    {
-      to: "/pos/kds",
-      title: "Màn Hình Bếp (KDS)",
-      description: "Theo dõi order cần pha chế theo thời gian thực cho Barista / Bếp.",
-      icon: <Coffee size={22} color="#3D5E46" />,
-      featured: true,
-    },
-  ];
+    });
+  }
 
-  if (isShiftLeader || isStoreManager) {
+  // Everyone can usually see KDS, or maybe we check `kds.access`. For now, leave it.
+  posOperations.push({
+    to: "/pos/kds",
+    title: "Màn Hình Bếp (KDS)",
+    description: "Theo dõi order cần pha chế theo thời gian thực cho Barista / Bếp.",
+    icon: <Coffee size={22} color="#3D5E46" />,
+    featured: true,
+  });
+
+  if (hasPermission(user, "shift.operate") || hasPermission(user, "shift.reconcile")) {
     posOperations.push({
       to: "/pos/shift-reconciliation",
       title: "Kiểm Quỹ & Chốt Ca",

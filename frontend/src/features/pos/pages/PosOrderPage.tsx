@@ -518,6 +518,10 @@ export default function PosOrderPage() {
           setShiftWarning(current.reconciliation.warning?.message || null);
         }
       } catch (e: any) {
+        if (e?.response?.data?.message === "STORE_SELECTION_REQUIRED") {
+          nav("/workspace/select-store");
+          return;
+        }
         setError(e?.response?.data?.message || e.message || "Load menu failed");
       } finally {
         setLoadingMenu(false);

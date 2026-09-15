@@ -9,6 +9,7 @@ import {
   listPosShiftReconciliations,
   openPosShiftReconciliation,
   verifyPosShiftClose,
+  reconcilePosShiftReconciliation,
 } from "./shiftReconciliation.controller";
 
 
@@ -26,5 +27,6 @@ router.post("/open", requirePermission("shift.operate"), openPosShiftReconciliat
 router.get("/:id", getPosShiftReconciliationDetail);
 router.post("/:id/verify-close", requirePermission("shift.operate"), verifyPosShiftClose);
 router.post("/:id/close", requirePermission("shift.operate"), closePosShiftReconciliation);
+router.post("/:id/reconcile", requirePermission("shift.reconcile"), reconcilePosShiftReconciliation);
 
 export default router;
